@@ -18,7 +18,7 @@ namespace Orleans.Providers.Streams.AzureServiceBus
     {
         [JsonProperty]
         [Id(0)]
-        private EventSequenceTokenV2 sequenceToken;
+        private EventSequenceTokenV2 sequenceToken = null!;
 
         [JsonProperty]
         [Id(1)]
@@ -29,22 +29,13 @@ namespace Orleans.Providers.Streams.AzureServiceBus
         private readonly Dictionary<string, object> requestContext;
 
         [Id(3)]
-        public StreamId StreamId { get; set; }
+        public StreamId StreamId { get; }
 
         public StreamSequenceToken SequenceToken => sequenceToken;
 
         internal EventSequenceTokenV2 RealSequenceToken
         {
             set { sequenceToken = value; }
-        }
-
-        public AzureServiceBusBatchContainer()
-        {
-            // For serialization use only
-            StreamId = StreamId.Create("", "");
-            events = new List<object>();
-            requestContext = new Dictionary<string, object>();
-            sequenceToken = new EventSequenceTokenV2();
         }
 
         [JsonConstructor]
@@ -65,7 +56,7 @@ namespace Orleans.Providers.Streams.AzureServiceBus
             StreamId = streamId;
             this.events = events;
             this.requestContext = requestContext;
-            sequenceToken = new EventSequenceTokenV2();
+            sequenceToken = new EventSequenceTokenV2(0, 0);
         }
 
         public IEnumerable<Tuple<T, StreamSequenceToken>> GetEvents<T>()
@@ -75,7 +66,7 @@ namespace Orleans.Providers.Streams.AzureServiceBus
 
         public bool ImportRequestContext()
         {
-            if (requestContext != null && requestContext.Count > 0)
+            if (requestContext != null)
             {
                 RequestContextExtensions.Import(requestContext);
                 return true;

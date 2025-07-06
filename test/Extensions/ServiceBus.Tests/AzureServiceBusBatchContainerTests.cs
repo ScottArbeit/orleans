@@ -79,7 +79,7 @@ namespace ServiceBus.Tests
         }
 
         [Fact]
-        public void ImportRequestContext_WithEmptyContext_ReturnsFalse()
+        public void ImportRequestContext_WithEmptyContext_ReturnsTrue()
         {
             var streamId = StreamId.Create("test-namespace", "test-key");
             var events = new List<object> { "event1" };
@@ -89,7 +89,7 @@ namespace ServiceBus.Tests
 
             var result = container.ImportRequestContext();
 
-            Assert.False(result);
+            Assert.True(result);
         }
 
         [Fact]
