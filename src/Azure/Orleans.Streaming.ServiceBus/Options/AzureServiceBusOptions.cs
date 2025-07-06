@@ -102,6 +102,42 @@ namespace Orleans.Configuration
         public bool? DeadLetteringOnMessageExpiration { get; set; }
 
         /// <summary>
+        /// Gets or sets the maximum number of pending deliveries to track.
+        /// Default is 1000. When exceeded, oldest deliveries will be cleaned up.
+        /// </summary>
+        public int MaxPendingDeliveries { get; set; } = 1000;
+
+        /// <summary>
+        /// Gets or sets the timeout for cleaning up pending deliveries.
+        /// Default is 5 minutes. Deliveries older than this will be cleaned up.
+        /// </summary>
+        public TimeSpan PendingDeliveryTimeout { get; set; } = TimeSpan.FromMinutes(5);
+
+        /// <summary>
+        /// Gets or sets the maximum number of messages to accumulate before delivering a batch.
+        /// Default is 1 (no batching). Set higher for better performance when processing high-volume streams.
+        /// </summary>
+        public int MaxBatchSize { get; set; } = 1;
+
+        /// <summary>
+        /// Gets or sets the maximum time to wait before delivering a partial batch.
+        /// Default is 100ms. Only applicable when MaxBatchSize > 1.
+        /// </summary>
+        public TimeSpan BatchTimeout { get; set; } = TimeSpan.FromMilliseconds(100);
+
+        /// <summary>
+        /// Gets or sets the maximum number of processor startup retries.
+        /// Default is 3. Set to 0 to disable retries.
+        /// </summary>
+        public int ProcessorStartupRetries { get; set; } = 3;
+
+        /// <summary>
+        /// Gets or sets the delay between processor startup retries.
+        /// Default is 1 second.
+        /// </summary>
+        public TimeSpan ProcessorStartupRetryDelay { get; set; } = TimeSpan.FromSeconds(1);
+
+        /// <summary>
         /// Gets or sets the optional delegate used to create a <see cref="ServiceBusClient"/> instance.
         /// </summary>
         internal Func<Task<ServiceBusClient>> CreateClient { get; private set; }

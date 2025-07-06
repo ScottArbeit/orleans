@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -29,12 +30,16 @@ internal class AzureServiceBusAdapterReceiver : IQueueAdapterReceiver
     private AzureServiceBusDataManager? _manager;
     private ServiceBusProcessor? _processor;
     private ServiceBusSessionProcessor? _sessionProcessor;
-    private readonly List<PendingDelivery> _pendingDeliveries = new();
+    private readonly ConcurrentQueue<PendingDelivery> _pendingDeliveries = new();
     private TaskCompletionSource<IList<IBatchContainer>>? _messagesTcs;
-    private readonly object _processorLock = new();
+    private readonly SemaphoreSlim _processorSemaphore = new(1, 1);
+    private readonly SemaphoreSlim _messagesSemaphore = new(1, 1);
     private long _sequenceId = 0;
     private bool _processorStarted = false;
     private bool _disposed = false;
+    private readonly List<IBatchContainer> _batchAccumulator = new();
+    private Timer? _batchTimer;
+    private Timer? _cleanupTimer;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureServiceBusAdapterReceiver"/> class.
@@ -68,6 +73,10 @@ internal class AzureServiceBusAdapterReceiver : IQueueAdapterReceiver
             throw new InvalidOperationException("Data manager is not available.");
         }
 
+        // Start cleanup timer for pending deliveries
+        _cleanupTimer = new Timer(CleanupPendingDeliveries, null, 
+            _options.PendingDeliveryTimeout, _options.PendingDeliveryTimeout);
+
         // Initialize data manager connection
         return _manager.InitAsync();
     }
@@ -90,12 +99,17 @@ internal class AzureServiceBusAdapterReceiver : IQueueAdapterReceiver
         
         try
         {
-            lock (_processorLock)
+            await _messagesSemaphore.WaitAsync(cts.Token);
+            try
             {
                 if (_messagesTcs is null || _messagesTcs.Task.IsCompleted)
                 {
                     _messagesTcs = new TaskCompletionSource<IList<IBatchContainer>>(TaskCreationOptions.RunContinuationsAsynchronously);
                 }
+            }
+            finally
+            {
+                _messagesSemaphore.Release();
             }
 
             // Wait for messages to arrive via processor events
@@ -139,27 +153,35 @@ internal class AzureServiceBusAdapterReceiver : IQueueAdapterReceiver
             // Get sequence tokens of delivered messages
             var deliveredTokens = messages.Select(message => message.SequenceToken).ToList();
             
-            // Find oldest delivered message
-            var oldest = deliveredTokens.Max();
+            // Find newest delivered message (using Max is correct - see Orleans patterns)
+            var newest = deliveredTokens.Max();
             
-            // Find all pending messages at or before the oldest delivered token
-            List<PendingDelivery> completedDeliveries;
-            lock (_pendingDeliveries)
+            // Find all pending messages at or before the newest delivered token
+            var completedDeliveries = new List<PendingDelivery>();
+            var tempQueue = new ConcurrentQueue<PendingDelivery>();
+            
+            // Process pending deliveries
+            while (_pendingDeliveries.TryDequeue(out var pendingDelivery))
             {
-                completedDeliveries = _pendingDeliveries
-                    .Where(pendingDelivery => !pendingDelivery.Token.Newer(oldest))
-                    .ToList();
-                
-                if (completedDeliveries.Count == 0)
+                if (!pendingDelivery.Token.Newer(newest))
                 {
-                    return;
+                    completedDeliveries.Add(pendingDelivery);
                 }
-                
-                // Remove completed deliveries from pending list
-                foreach (var delivery in completedDeliveries)
+                else
                 {
-                    _pendingDeliveries.Remove(delivery);
+                    tempQueue.Enqueue(pendingDelivery);
                 }
+            }
+            
+            // Re-enqueue remaining deliveries
+            while (tempQueue.TryDequeue(out var pendingDelivery))
+            {
+                _pendingDeliveries.Enqueue(pendingDelivery);
+            }
+
+            if (completedDeliveries.Count == 0)
+            {
+                return;
             }
 
             // Complete the messages that were successfully delivered
@@ -232,20 +254,35 @@ internal class AzureServiceBusAdapterReceiver : IQueueAdapterReceiver
 
         try
         {
+            // Stop timers
+            _batchTimer?.Dispose();
+            _cleanupTimer?.Dispose();
+
             // Stop processors
             await StopProcessors();
 
             // Complete any pending TaskCompletionSource
-            lock (_processorLock)
+            await _messagesSemaphore.WaitAsync();
+            try
             {
                 _messagesTcs?.TrySetCanceled();
                 _messagesTcs = null;
             }
+            finally
+            {
+                _messagesSemaphore.Release();
+            }
 
             // Clear pending deliveries
-            lock (_pendingDeliveries)
+            while (_pendingDeliveries.TryDequeue(out _))
             {
-                _pendingDeliveries.Clear();
+                // Just clearing the queue
+            }
+
+            // Clear batch accumulator
+            lock (_batchAccumulator)
+            {
+                _batchAccumulator.Clear();
             }
 
             // Dispose data manager
@@ -254,6 +291,10 @@ internal class AzureServiceBusAdapterReceiver : IQueueAdapterReceiver
                 await _manager.DisposeAsync();
                 _manager = null;
             }
+
+            // Dispose semaphores
+            _processorSemaphore?.Dispose();
+            _messagesSemaphore?.Dispose();
 
             _disposed = true;
             _logger.LogInformation("Service Bus adapter receiver shutdown completed");
@@ -268,48 +309,71 @@ internal class AzureServiceBusAdapterReceiver : IQueueAdapterReceiver
     /// <summary>
     /// Ensures the processor is started and configured correctly.
     /// </summary>
-    private Task EnsureProcessorStarted()
+    private async Task EnsureProcessorStarted()
     {
         if (_processorStarted || _manager is null)
         {
-            return Task.CompletedTask;
+            return;
         }
 
-        lock (_processorLock)
+        await _processorSemaphore.WaitAsync();
+        try
         {
             if (_processorStarted)
             {
-                return Task.CompletedTask;
+                return;
             }
 
-            try
-            {
-                if (_options.RequiresSession == true)
-                {
-                    StartSessionProcessor();
-                }
-                else
-                {
-                    StartRegularProcessor();
-                }
+            var retryCount = 0;
+            Exception? lastException = null;
 
-                _processorStarted = true;
-                _logger.LogInformation("Started Service Bus processor for entity {EntityName}", _manager.EntityName);
-            }
-            catch (Exception ex)
+            while (retryCount <= _options.ProcessorStartupRetries)
             {
-                _logger.LogError(ex, "Failed to start Service Bus processor for entity {EntityName}", _manager.EntityName);
-                throw;
+                try
+                {
+                    if (_options.RequiresSession == true)
+                    {
+                        await StartSessionProcessor();
+                    }
+                    else
+                    {
+                        await StartRegularProcessor();
+                    }
+
+                    _processorStarted = true;
+                    _logger.LogInformation("Started Service Bus processor for entity {EntityName} after {RetryCount} attempts", 
+                        _manager.EntityName, retryCount);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                    retryCount++;
+                    
+                    if (retryCount <= _options.ProcessorStartupRetries)
+                    {
+                        _logger.LogWarning(ex, "Failed to start Service Bus processor for entity {EntityName} (attempt {RetryCount}/{MaxRetries}). Retrying in {Delay}", 
+                            _manager.EntityName, retryCount, _options.ProcessorStartupRetries + 1, _options.ProcessorStartupRetryDelay);
+                        
+                        await Task.Delay(_options.ProcessorStartupRetryDelay);
+                    }
+                }
             }
+
+            _logger.LogError(lastException, "Failed to start Service Bus processor for entity {EntityName} after {RetryCount} attempts", 
+                _manager.EntityName, retryCount);
+            throw lastException ?? new InvalidOperationException("Failed to start Service Bus processor");
         }
-
-        return Task.CompletedTask;
+        finally
+        {
+            _processorSemaphore.Release();
+        }
     }
 
     /// <summary>
     /// Starts the regular (non-session) Service Bus processor.
     /// </summary>
-    private void StartRegularProcessor()
+    private async Task StartRegularProcessor()
     {
         if (_manager is null)
         {
@@ -320,23 +384,13 @@ internal class AzureServiceBusAdapterReceiver : IQueueAdapterReceiver
         _processor.ProcessMessageAsync += OnMessageReceived;
         _processor.ProcessErrorAsync += OnProcessorError;
         
-        _ = Task.Run(async () => 
-        {
-            try
-            {
-                await _processor.StartProcessingAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to start Service Bus processor");
-            }
-        });
+        await _processor.StartProcessingAsync();
     }
 
     /// <summary>
     /// Starts the session-enabled Service Bus processor.
     /// </summary>
-    private void StartSessionProcessor()
+    private async Task StartSessionProcessor()
     {
         if (_manager is null)
         {
@@ -347,17 +401,7 @@ internal class AzureServiceBusAdapterReceiver : IQueueAdapterReceiver
         _sessionProcessor.ProcessMessageAsync += OnSessionMessageReceived;
         _sessionProcessor.ProcessErrorAsync += OnProcessorError;
         
-        _ = Task.Run(async () => 
-        {
-            try
-            {
-                await _sessionProcessor.StartProcessingAsync();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to start Service Bus session processor");
-            }
-        });
+        await _sessionProcessor.StartProcessingAsync();
     }
 
     /// <summary>
@@ -411,22 +455,16 @@ internal class AzureServiceBusAdapterReceiver : IQueueAdapterReceiver
             
             var pendingDelivery = new PendingDelivery(batchContainer.SequenceToken, args.Message, args, null);
             
-            lock (_pendingDeliveries)
+            // Check pending deliveries count and cleanup if needed
+            if (_pendingDeliveries.Count >= _options.MaxPendingDeliveries)
             {
-                _pendingDeliveries.Add(pendingDelivery);
+                CleanupPendingDeliveries(null);
             }
+            
+            _pendingDeliveries.Enqueue(pendingDelivery);
 
-            // Deliver message to Orleans streaming
-            TaskCompletionSource<IList<IBatchContainer>>? currentTcs = null;
-            lock (_processorLock)
-            {
-                currentTcs = _messagesTcs;
-            }
-
-            if (currentTcs is not null && !currentTcs.Task.IsCompleted)
-            {
-                currentTcs.TrySetResult(new List<IBatchContainer> { batchContainer });
-            }
+            // Handle batching
+            _ = HandleMessageBatching(batchContainer);
 
             _logger.LogDebug("Received Service Bus message {MessageId} for stream {StreamId}", 
                 args.Message.MessageId, batchContainer.StreamId);
@@ -465,22 +503,16 @@ internal class AzureServiceBusAdapterReceiver : IQueueAdapterReceiver
             
             var pendingDelivery = new PendingDelivery(batchContainer.SequenceToken, args.Message, null, args);
             
-            lock (_pendingDeliveries)
+            // Check pending deliveries count and cleanup if needed
+            if (_pendingDeliveries.Count >= _options.MaxPendingDeliveries)
             {
-                _pendingDeliveries.Add(pendingDelivery);
+                CleanupPendingDeliveries(null);
             }
+            
+            _pendingDeliveries.Enqueue(pendingDelivery);
 
-            // Deliver message to Orleans streaming
-            TaskCompletionSource<IList<IBatchContainer>>? currentTcs = null;
-            lock (_processorLock)
-            {
-                currentTcs = _messagesTcs;
-            }
-
-            if (currentTcs is not null && !currentTcs.Task.IsCompleted)
-            {
-                currentTcs.TrySetResult(new List<IBatchContainer> { batchContainer });
-            }
+            // Handle batching
+            _ = HandleMessageBatching(batchContainer);
 
             _logger.LogDebug("Received Service Bus session message {MessageId} for stream {StreamId} in session {SessionId}", 
                 args.Message.MessageId, batchContainer.StreamId, args.SessionId);
@@ -507,24 +539,24 @@ internal class AzureServiceBusAdapterReceiver : IQueueAdapterReceiver
     /// <summary>
     /// Handles processor errors.
     /// </summary>
-    private Task OnProcessorError(ProcessErrorEventArgs args)
+    private async Task OnProcessorError(ProcessErrorEventArgs args)
     {
         _logger.LogError(args.Exception, "Service Bus processor error occurred. Source: {ErrorSource}, EntityPath: {EntityPath}", 
             args.ErrorSource, args.EntityPath);
         
         // Complete any waiting TaskCompletionSource with an empty result
-        TaskCompletionSource<IList<IBatchContainer>>? currentTcs = null;
-        lock (_processorLock)
+        await _messagesSemaphore.WaitAsync();
+        try
         {
-            currentTcs = _messagesTcs;
+            if (_messagesTcs is not null && !_messagesTcs.Task.IsCompleted)
+            {
+                _messagesTcs.TrySetResult(new List<IBatchContainer>());
+            }
         }
-
-        if (currentTcs is not null && !currentTcs.Task.IsCompleted)
+        finally
         {
-            currentTcs.TrySetResult(new List<IBatchContainer>());
+            _messagesSemaphore.Release();
         }
-
-        return Task.CompletedTask;
     }
 
     /// <summary>
@@ -558,6 +590,116 @@ internal class AzureServiceBusAdapterReceiver : IQueueAdapterReceiver
     }
 
     /// <summary>
+    /// Handles message batching logic.
+    /// </summary>
+    private Task HandleMessageBatching(IBatchContainer batchContainer)
+    {
+        lock (_batchAccumulator)
+        {
+            _batchAccumulator.Add(batchContainer);
+
+            // Check if we should deliver the batch immediately
+            if (_options.MaxBatchSize <= 1 || _batchAccumulator.Count >= _options.MaxBatchSize)
+            {
+                DeliverBatch();
+                return Task.CompletedTask;
+            }
+
+            // Start batch timer if not already running
+            if (_batchTimer is null)
+            {
+                _batchTimer = new Timer(OnBatchTimeout, null, _options.BatchTimeout, Timeout.InfiniteTimeSpan);
+            }
+        }
+
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Called when the batch timeout expires.
+    /// </summary>
+    private void OnBatchTimeout(object? state)
+    {
+        lock (_batchAccumulator)
+        {
+            if (_batchAccumulator.Count > 0)
+            {
+                DeliverBatch();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Delivers the current batch to Orleans streaming.
+    /// Must be called within a lock on _batchAccumulator.
+    /// </summary>
+    private void DeliverBatch()
+    {
+        if (_batchAccumulator.Count == 0)
+        {
+            return;
+        }
+
+        var batch = _batchAccumulator.ToList();
+        _batchAccumulator.Clear();
+
+        // Dispose existing timer
+        _batchTimer?.Dispose();
+        _batchTimer = null;
+
+        // Deliver batch asynchronously
+        _ = Task.Run(async () =>
+        {
+            await _messagesSemaphore.WaitAsync();
+            try
+            {
+                if (_messagesTcs is not null && !_messagesTcs.Task.IsCompleted)
+                {
+                    _messagesTcs.TrySetResult(batch);
+                }
+            }
+            finally
+            {
+                _messagesSemaphore.Release();
+            }
+        });
+    }
+
+    /// <summary>
+    /// Cleans up old pending deliveries to prevent memory leaks.
+    /// </summary>
+    private void CleanupPendingDeliveries(object? state)
+    {
+        var cutoffTime = DateTime.UtcNow - _options.PendingDeliveryTimeout;
+        var tempQueue = new ConcurrentQueue<PendingDelivery>();
+        var cleanedCount = 0;
+
+        // Process all pending deliveries
+        while (_pendingDeliveries.TryDequeue(out var pendingDelivery))
+        {
+            if (pendingDelivery.Timestamp > cutoffTime)
+            {
+                tempQueue.Enqueue(pendingDelivery);
+            }
+            else
+            {
+                cleanedCount++;
+            }
+        }
+
+        // Re-enqueue recent deliveries
+        while (tempQueue.TryDequeue(out var pendingDelivery))
+        {
+            _pendingDeliveries.Enqueue(pendingDelivery);
+        }
+
+        if (cleanedCount > 0)
+        {
+            _logger.LogDebug("Cleaned up {CleanedCount} old pending deliveries", cleanedCount);
+        }
+    }
+
+    /// <summary>
     /// Throws an exception if the receiver has been disposed.
     /// </summary>
     private void ThrowIfDisposed()
@@ -579,11 +721,13 @@ internal class AzureServiceBusAdapterReceiver : IQueueAdapterReceiver
             Message = message ?? throw new ArgumentNullException(nameof(message));
             ReceivedMessage = receivedMessage;
             SessionReceivedMessage = sessionReceivedMessage;
+            Timestamp = DateTime.UtcNow;
         }
 
         public StreamSequenceToken Token { get; }
         public ServiceBusReceivedMessage Message { get; }
         public ProcessMessageEventArgs? ReceivedMessage { get; }
         public ProcessSessionMessageEventArgs? SessionReceivedMessage { get; }
+        public DateTime Timestamp { get; }
     }
 }
