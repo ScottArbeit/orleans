@@ -1,0 +1,81 @@
+#nullable enable
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Newtonsoft.Json;
+using Orleans.Providers.Streams.Common;
+using Orleans.Runtime;
+using Orleans.Streams;
+
+namespace Orleans.Providers.Streams.AzureServiceBus;
+
+/// <summary>
+/// Azure Service Bus batch container that holds events and provides stream processing capabilities
+/// </summary>
+[Serializable]
+[GenerateSerializer]
+internal class AzureServiceBusBatchContainer : IBatchContainer
+{
+        [JsonProperty]
+        [Id(0)]
+        private EventSequenceTokenV2 sequenceToken = null!;
+
+        [JsonProperty]
+        [Id(1)]
+        private readonly List<object> events;
+
+        [JsonProperty]
+        [Id(2)]
+        private readonly Dictionary<string, object> requestContext;
+
+        [Id(3)]
+        public StreamId StreamId { get; }
+
+        public StreamSequenceToken SequenceToken => sequenceToken;
+
+        internal EventSequenceTokenV2 RealSequenceToken
+        {
+            set { sequenceToken = value; }
+        }
+
+        [JsonConstructor]
+        public AzureServiceBusBatchContainer(
+            StreamId streamId,
+            List<object> events,
+            Dictionary<string, object> requestContext,
+            EventSequenceTokenV2 sequenceToken)
+            : this(streamId, events, requestContext)
+        {
+            this.sequenceToken = sequenceToken;
+        }
+
+        public AzureServiceBusBatchContainer(StreamId streamId, List<object> events, Dictionary<string, object> requestContext)
+        {
+            if (events is null) throw new ArgumentNullException(nameof(events), "Events collection cannot be null");
+
+            StreamId = streamId;
+            this.events = events;
+            this.requestContext = requestContext;
+            sequenceToken = new EventSequenceTokenV2(0, 0);
+        }
+
+        public IEnumerable<Tuple<T, StreamSequenceToken>> GetEvents<T>()
+        {
+            return events.OfType<T>().Select((e, i) => Tuple.Create<T, StreamSequenceToken>(e, sequenceToken.CreateSequenceTokenForEvent(i)));
+        }
+
+        public bool ImportRequestContext()
+        {
+            if (requestContext != null)
+            {
+                RequestContextExtensions.Import(requestContext);
+                return true;
+            }
+            return false;
+        }
+
+        public override string ToString()
+        {
+            return $"[AzureServiceBusBatchContainer:Stream={StreamId},#Items={events.Count}]";
+        }
+}
