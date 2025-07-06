@@ -60,8 +60,18 @@ internal sealed class AzureServiceBusAdapter : IQueueAdapter
     /// <inheritdoc/>
     public IQueueAdapterReceiver CreateReceiver(QueueId queueId)
     {
-        // For now, throw NotImplementedException as this will be implemented in issue #7
-        throw new NotImplementedException("AzureServiceBusAdapterReceiver creation will be implemented in a separate issue.");
+        var entityName = GetEntityName(queueId);
+        var dataManager = new AzureServiceBusDataManager(_loggerFactory, entityName, _options);
+        
+        // Determine subscription name for topic topology
+        string? subscriptionName = null;
+        if (_options.TopologyType == ServiceBusTopologyType.Topic)
+        {
+            subscriptionName = _options.SubscriptionName ?? _streamQueueMapper.QueueToPartition(queueId);
+        }
+        
+        var logger = _loggerFactory.CreateLogger<AzureServiceBusAdapterReceiver>();
+        return new AzureServiceBusAdapterReceiver(dataManager, _dataAdapter, _options, subscriptionName, logger);
     }
 
     /// <inheritdoc/>
