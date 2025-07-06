@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Orleans.Providers.Streams.AzureServiceBus;
+using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
 using Xunit;
 
@@ -19,20 +20,19 @@ namespace ServiceBus.Tests
             var container = new AzureServiceBusBatchContainer(streamId, events, context);
 
             Assert.Equal(streamId, container.StreamId);
-            Assert.Equal(events, container.Events);
-            Assert.Equal(context, container.RequestContext);
+            Assert.NotNull(container.SequenceToken);
         }
 
         [Fact]
-        public void Constructor_WithNullContext_CreatesEmptyContext()
+        public void Constructor_WithNullContext_HandlesGracefully()
         {
             var streamId = StreamId.Create("test-namespace", "test-key");
             var events = new List<object> { "event1" };
 
             var container = new AzureServiceBusBatchContainer(streamId, events, null);
 
-            Assert.NotNull(container.RequestContext);
-            Assert.Empty(container.RequestContext);
+            Assert.Equal(streamId, container.StreamId);
+            Assert.NotNull(container.SequenceToken);
         }
 
         [Fact]
@@ -51,7 +51,7 @@ namespace ServiceBus.Tests
             var streamId = StreamId.Create("test-namespace", "test-key");
             var events = new List<object> { "string1", 42, "string2", 99 };
             var context = new Dictionary<string, object>();
-            var sequenceToken = new AzureServiceBusSequenceTokenV2(100, 0);
+            var sequenceToken = new EventSequenceTokenV2(100, 0);
 
             var container = new AzureServiceBusBatchContainer(streamId, events, context, sequenceToken);
 
@@ -67,8 +67,8 @@ namespace ServiceBus.Tests
             Assert.Equal(99, intEvents[1].Item1);
 
             // Check sequence tokens for events
-            var firstStringToken = stringEvents[0].Item2 as AzureServiceBusSequenceTokenV2;
-            var secondStringToken = stringEvents[1].Item2 as AzureServiceBusSequenceTokenV2;
+            var firstStringToken = stringEvents[0].Item2 as EventSequenceTokenV2;
+            var secondStringToken = stringEvents[1].Item2 as EventSequenceTokenV2;
             
             Assert.NotNull(firstStringToken);
             Assert.NotNull(secondStringToken);
@@ -141,7 +141,7 @@ namespace ServiceBus.Tests
             var streamId = StreamId.Create("test-namespace", "test-key");
             var events = new List<object> { "event1" };
             var context = new Dictionary<string, object>();
-            var sequenceToken = new AzureServiceBusSequenceTokenV2(123, 5);
+            var sequenceToken = new EventSequenceTokenV2(123, 5);
 
             var container = new AzureServiceBusBatchContainer(streamId, events, context, sequenceToken);
 

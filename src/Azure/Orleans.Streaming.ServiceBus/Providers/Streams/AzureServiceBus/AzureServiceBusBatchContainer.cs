@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
+using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
 using Orleans.Streams;
 
@@ -13,110 +14,78 @@ namespace Orleans.Providers.Streams.AzureServiceBus
     /// </summary>
     [Serializable]
     [GenerateSerializer]
-    public class AzureServiceBusBatchContainer : IBatchContainer
+    internal class AzureServiceBusBatchContainer : IBatchContainer
     {
         [JsonProperty]
         [Id(0)]
-        public StreamId StreamId { get; set; }
+        private EventSequenceTokenV2 sequenceToken;
 
         [JsonProperty]
         [Id(1)]
-        public List<object> Events { get; set; } = new();
+        private readonly List<object> events;
 
         [JsonProperty]
         [Id(2)]
-        public Dictionary<string, object>? RequestContext { get; set; } = new();
+        private readonly Dictionary<string, object> requestContext;
 
-        [JsonProperty]
         [Id(3)]
-        private AzureServiceBusSequenceTokenV2 sequenceToken;
+        public StreamId StreamId { get; set; }
 
-        /// <summary>
-        /// Gets the stream sequence token for the start of this batch
-        /// </summary>
         public StreamSequenceToken SequenceToken => sequenceToken;
 
-        /// <summary>
-        /// Sets the real sequence token for internal use
-        /// </summary>
-        internal AzureServiceBusSequenceTokenV2 RealSequenceToken
+        internal EventSequenceTokenV2 RealSequenceToken
         {
             set { sequenceToken = value; }
         }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="AzureServiceBusBatchContainer"/> class.
-        /// </summary>
-        /// <remarks>
-        /// This constructor is for serialization use only.
-        /// </remarks>
         public AzureServiceBusBatchContainer()
         {
+            // For serialization use only
             StreamId = StreamId.Create("", "");
-            Events = new List<object>();
-            RequestContext = new Dictionary<string, object>();
-            sequenceToken = new AzureServiceBusSequenceTokenV2();
+            events = new List<object>();
+            requestContext = new Dictionary<string, object>();
+            sequenceToken = new EventSequenceTokenV2();
         }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="AzureServiceBusBatchContainer"/> class.
-        /// </summary>
-        /// <param name="streamId">The stream identifier.</param>
-        /// <param name="events">The events in this batch.</param>
-        /// <param name="requestContext">The request context.</param>
+        [JsonConstructor]
+        public AzureServiceBusBatchContainer(
+            StreamId streamId,
+            List<object> events,
+            Dictionary<string, object> requestContext,
+            EventSequenceTokenV2 sequenceToken)
+            : this(streamId, events, requestContext)
+        {
+            this.sequenceToken = sequenceToken;
+        }
+
         public AzureServiceBusBatchContainer(StreamId streamId, List<object> events, Dictionary<string, object> requestContext)
         {
             if (events == null) throw new ArgumentNullException(nameof(events), "Message contains no events");
 
             StreamId = streamId;
-            Events = events;
-            RequestContext = requestContext ?? new Dictionary<string, object>();
-            sequenceToken = new AzureServiceBusSequenceTokenV2();
+            this.events = events;
+            this.requestContext = requestContext;
+            sequenceToken = new EventSequenceTokenV2();
         }
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="AzureServiceBusBatchContainer"/> class.
-        /// </summary>
-        /// <param name="streamId">The stream identifier.</param>
-        /// <param name="events">The events in this batch.</param>
-        /// <param name="requestContext">The request context.</param>
-        /// <param name="sequenceToken">The sequence token.</param>
-        [JsonConstructor]
-        public AzureServiceBusBatchContainer(
-            StreamId streamId,
-            List<object> events,
-            Dictionary<string, object>? requestContext,
-            AzureServiceBusSequenceTokenV2 sequenceToken)
-        {
-            if (events == null) throw new ArgumentNullException(nameof(events), "Message contains no events");
-
-            StreamId = streamId;
-            Events = events;
-            RequestContext = requestContext ?? new Dictionary<string, object>();
-            this.sequenceToken = sequenceToken;
-        }
-
-        /// <inheritdoc/>
         public IEnumerable<Tuple<T, StreamSequenceToken>> GetEvents<T>()
         {
-            return Events.OfType<T>().Select((e, i) => Tuple.Create<T, StreamSequenceToken>(e, sequenceToken.CreateSequenceTokenForEvent(i)));
+            return events.OfType<T>().Select((e, i) => Tuple.Create<T, StreamSequenceToken>(e, sequenceToken.CreateSequenceTokenForEvent(i)));
         }
 
-        /// <inheritdoc/>
         public bool ImportRequestContext()
         {
-            if (RequestContext != null && RequestContext.Count > 0)
+            if (requestContext != null && requestContext.Count > 0)
             {
-                RequestContextExtensions.Import(RequestContext);
+                RequestContextExtensions.Import(requestContext);
                 return true;
             }
             return false;
         }
 
-        /// <inheritdoc/>
         public override string ToString()
         {
-            return $"[AzureServiceBusBatchContainer:Stream={StreamId},#Items={Events.Count}]";
+            return $"[AzureServiceBusBatchContainer:Stream={StreamId},#Items={events.Count}]";
         }
     }
 }
