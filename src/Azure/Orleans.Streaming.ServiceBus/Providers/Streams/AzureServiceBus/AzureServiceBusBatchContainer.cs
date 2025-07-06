@@ -7,15 +7,15 @@ using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
 using Orleans.Streams;
 
-namespace Orleans.Providers.Streams.AzureServiceBus
+namespace Orleans.Providers.Streams.AzureServiceBus;
+
+/// <summary>
+/// Azure Service Bus batch container that holds events and provides stream processing capabilities
+/// </summary>
+[Serializable]
+[GenerateSerializer]
+internal class AzureServiceBusBatchContainer : IBatchContainer
 {
-    /// <summary>
-    /// Azure Service Bus batch container that holds events and provides stream processing capabilities
-    /// </summary>
-    [Serializable]
-    [GenerateSerializer]
-    internal class AzureServiceBusBatchContainer : IBatchContainer
-    {
         [JsonProperty]
         [Id(0)]
         private EventSequenceTokenV2 sequenceToken = null!;
@@ -51,7 +51,7 @@ namespace Orleans.Providers.Streams.AzureServiceBus
 
         public AzureServiceBusBatchContainer(StreamId streamId, List<object> events, Dictionary<string, object> requestContext)
         {
-            if (events == null) throw new ArgumentNullException(nameof(events), "Message contains no events");
+            if (events is null) throw new ArgumentNullException(nameof(events), "Events collection cannot be null");
 
             StreamId = streamId;
             this.events = events;
@@ -78,5 +78,4 @@ namespace Orleans.Providers.Streams.AzureServiceBus
         {
             return $"[AzureServiceBusBatchContainer:Stream={StreamId},#Items={events.Count}]";
         }
-    }
 }
