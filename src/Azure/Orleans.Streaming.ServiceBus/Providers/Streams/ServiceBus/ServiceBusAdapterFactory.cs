@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -35,10 +36,8 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
         this.options = options ?? throw new ArgumentNullException(nameof(options));
         this.loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
         
-        // Generate queue names based on partition count
-        var queueNames = ServiceBusStreamProviderUtils.GenerateDefaultServiceBusQueueNames(
-            options.QueueNamePrefix ?? "orleans-stream", 
-            options.PartitionCount);
+        // Generate queue names based on options
+        var queueNames = GetEntityNames(options);
         
         this.streamQueueMapper = new(queueNames, providerName);
         this.adapterCache = new SimpleQueueAdapterCache(cacheOptions, this.providerName, this.loggerFactory);
@@ -86,6 +85,26 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
     public Task<IStreamFailureHandler> GetDeliveryFailureHandler(QueueId queueId)
     {
         return StreamFailureHandlerFactory?.Invoke(queueId) ?? Task.FromResult<IStreamFailureHandler>(new NoOpStreamDeliveryFailureHandler());
+    }
+
+    private static List<string> GetEntityNames(ServiceBusOptions options)
+    {
+        // If specific entity names are provided, use them
+        if (options.EntityNames is not null && options.EntityNames.Count > 0)
+        {
+            return options.EntityNames;
+        }
+
+        // If a single entity name is provided, use it for all partitions
+        if (!string.IsNullOrWhiteSpace(options.EntityName))
+        {
+            return [options.EntityName];
+        }
+
+        // Generate entity names based on partition count and prefix
+        return ServiceBusStreamProviderUtils.GenerateDefaultServiceBusQueueNames(
+            options.QueueNamePrefix, 
+            options.PartitionCount);
     }
 
     public static ServiceBusAdapterFactory Create(IServiceProvider services, string name)

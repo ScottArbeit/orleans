@@ -48,7 +48,8 @@ public class SiloServiceBusStreamConfigurator : SiloPersistentStreamConfigurator
         {
             services.ConfigureNamedOptionForLogging<ServiceBusOptions>(name)
                 .ConfigureNamedOptionForLogging<SimpleQueueCacheOptions>(name)
-                .ConfigureNamedOptionForLogging<HashRingStreamQueueMapperOptions>(name);
+                .ConfigureNamedOptionForLogging<HashRingStreamQueueMapperOptions>(name)
+                .AddTransient<IConfigurationValidator>(sp => ServiceBusOptionsValidator.Create(sp, name));
         });
     }
 }
@@ -63,7 +64,8 @@ public class ClusterClientServiceBusStreamConfigurator : ClusterClientPersistent
         builder.ConfigureServices(services =>
         {
             services.ConfigureNamedOptionForLogging<ServiceBusOptions>(name)
-                .ConfigureNamedOptionForLogging<HashRingStreamQueueMapperOptions>(name);
+                .ConfigureNamedOptionForLogging<HashRingStreamQueueMapperOptions>(name)
+                .AddTransient<IConfigurationValidator>(sp => ServiceBusOptionsValidator.Create(sp, name));
         });
     }
 }
