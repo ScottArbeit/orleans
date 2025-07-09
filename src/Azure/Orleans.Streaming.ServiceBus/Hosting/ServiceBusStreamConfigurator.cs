@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Orleans.Providers.Streams.ServiceBus;
 using Orleans.Configuration;
 using Orleans.Streams;
+using Orleans.Streaming.ServiceBus;
 
 namespace Orleans.Hosting;
 
@@ -49,7 +50,8 @@ public class SiloServiceBusStreamConfigurator : SiloPersistentStreamConfigurator
             services.ConfigureNamedOptionForLogging<ServiceBusOptions>(name)
                 .ConfigureNamedOptionForLogging<SimpleQueueCacheOptions>(name)
                 .ConfigureNamedOptionForLogging<HashRingStreamQueueMapperOptions>(name)
-                .AddTransient<IConfigurationValidator>(sp => ServiceBusOptionsValidator.Create(sp, name));
+                .AddTransient<IConfigurationValidator>(sp => ServiceBusOptionsValidator.Create(sp, name))
+                .AddSingleton<ServiceBusClientFactory>();
         });
     }
 }
@@ -65,7 +67,8 @@ public class ClusterClientServiceBusStreamConfigurator : ClusterClientPersistent
         {
             services.ConfigureNamedOptionForLogging<ServiceBusOptions>(name)
                 .ConfigureNamedOptionForLogging<HashRingStreamQueueMapperOptions>(name)
-                .AddTransient<IConfigurationValidator>(sp => ServiceBusOptionsValidator.Create(sp, name));
+                .AddTransient<IConfigurationValidator>(sp => ServiceBusOptionsValidator.Create(sp, name))
+                .AddSingleton<ServiceBusClientFactory>();
         });
     }
 }
