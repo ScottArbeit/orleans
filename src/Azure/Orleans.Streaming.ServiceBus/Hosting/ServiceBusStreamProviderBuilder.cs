@@ -33,10 +33,43 @@ public sealed class ServiceBusStreamProviderBuilder : IProviderBuilder<ISiloBuil
                 options.ConnectionString = connectionString;
             }
 
+            // Configure fully qualified namespace
+            var fullyQualifiedNamespace = configurationSection["FullyQualifiedNamespace"];
+            if (!string.IsNullOrEmpty(fullyQualifiedNamespace))
+            {
+                options.FullyQualifiedNamespace = fullyQualifiedNamespace;
+            }
+
+            // Configure entity type
+            var entityType = configurationSection["EntityType"];
+            if (!string.IsNullOrEmpty(entityType) && Enum.TryParse<ServiceBusEntityType>(entityType, true, out var entityTypeValue))
+            {
+                options.EntityType = entityTypeValue;
+            }
+
+            // Configure entity name
+            var entityName = configurationSection["EntityName"];
+            if (!string.IsNullOrEmpty(entityName))
+            {
+                options.EntityName = entityName;
+            }
+
             // Configure partition count
             if (int.TryParse(configurationSection["PartitionCount"], out var partitionCount))
             {
                 options.PartitionCount = partitionCount;
+            }
+
+            // Configure prefetch count
+            if (int.TryParse(configurationSection["PrefetchCount"], out var prefetchCount))
+            {
+                options.PrefetchCount = prefetchCount;
+            }
+
+            // Configure max delivery attempts
+            if (int.TryParse(configurationSection["MaxDeliveryAttempts"], out var maxDeliveryAttempts))
+            {
+                options.MaxDeliveryAttempts = maxDeliveryAttempts;
             }
 
             // Configure queue name prefix
@@ -44,12 +77,6 @@ public sealed class ServiceBusStreamProviderBuilder : IProviderBuilder<ISiloBuil
             if (!string.IsNullOrEmpty(queueNamePrefix))
             {
                 options.QueueNamePrefix = queueNamePrefix;
-            }
-
-            // Configure whether to use topics
-            if (bool.TryParse(configurationSection["UseTopics"], out var useTopics))
-            {
-                options.UseTopics = useTopics;
             }
 
             // Configure max wait time
