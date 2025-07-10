@@ -57,8 +57,13 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
     /// </summary>
     public virtual Task<IQueueAdapter> CreateAdapter()
     {
-        // Placeholder - would create actual ServiceBusAdapter
-        throw new NotImplementedException("ServiceBus adapter implementation is not yet available. This is a skeleton package.");
+        var adapter = new ServiceBusQueueAdapter(
+            providerName, 
+            options, 
+            streamQueueMapper, 
+            loggerFactory);
+        
+        return Task.FromResult<IQueueAdapter>(adapter);
     }
 
     /// <summary>
