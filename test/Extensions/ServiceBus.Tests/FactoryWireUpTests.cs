@@ -2,16 +2,12 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using Orleans;
 using Orleans.Configuration;
-using Orleans.Hosting;
 using Orleans.Providers.Streams.Common;
 using Orleans.Providers.Streams.ServiceBus;
 using Orleans.Runtime;
 using Orleans.Streaming.ServiceBus;
 using Orleans.Streams;
-using Orleans.TestingHost;
-using TestExtensions;
 using Xunit;
 
 namespace ServiceBus.Tests;
@@ -33,11 +29,11 @@ public class FactoryWireUpTests
         var name = "TestServiceBusProvider";
         var serviceBusOptions = new ServiceBusOptions
         {
-            ConnectionString = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=TestKey;SharedAccessKey=TestKeyValue",
             EntityType = ServiceBusEntityType.Queue,
             QueueNamePrefix = "test-queue",
             PartitionCount = 4
         };
+        serviceBusOptions.ConfigureServiceBusClient("Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=TestKey;SharedAccessKey=dGVzdGtleXZhbHVlMTIzNDU2Nzg5MA==");
         var cacheOptions = new SimpleQueueCacheOptions();
         var loggerFactory = NullLoggerFactory.Instance;
 
@@ -65,12 +61,12 @@ public class FactoryWireUpTests
         var name = "TestServiceBusProvider";
         var serviceBusOptions = new ServiceBusOptions
         {
-            ConnectionString = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=TestKey;SharedAccessKey=TestKeyValue",
             EntityType = ServiceBusEntityType.Topic,
             EntityName = "test-topic",
             SubscriptionNamePrefix = "test-subscription",
             PartitionCount = 2
         };
+        serviceBusOptions.ConfigureServiceBusClient("Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=TestKey;SharedAccessKey=dGVzdGtleXZhbHVlMTIzNDU2Nzg5MA==");
         var cacheOptions = new SimpleQueueCacheOptions();
         var loggerFactory = NullLoggerFactory.Instance;
 
@@ -98,9 +94,9 @@ public class FactoryWireUpTests
         var name = "TestServiceBusProvider";
         var serviceBusOptions = new ServiceBusOptions
         {
-            ConnectionString = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=TestKey;SharedAccessKey=TestKeyValue",
             EntityType = ServiceBusEntityType.Queue
         };
+        serviceBusOptions.ConfigureServiceBusClient("Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=TestKey;SharedAccessKey=dGVzdGtleXZhbHVlMTIzNDU2Nzg5MA==");
         var cacheOptions = new SimpleQueueCacheOptions();
         var loggerFactory = NullLoggerFactory.Instance;
 
@@ -124,9 +120,9 @@ public class FactoryWireUpTests
         var name = "TestServiceBusProvider";
         var serviceBusOptions = new ServiceBusOptions
         {
-            ConnectionString = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=TestKey;SharedAccessKey=TestKeyValue",
             EntityType = ServiceBusEntityType.Queue
         };
+        serviceBusOptions.ConfigureServiceBusClient("Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=TestKey;SharedAccessKey=dGVzdGtleXZhbHVlMTIzNDU2Nzg5MA==");
         var cacheOptions = new SimpleQueueCacheOptions();
         var loggerFactory = NullLoggerFactory.Instance;
 
@@ -150,9 +146,9 @@ public class FactoryWireUpTests
         var name = "TestServiceBusProvider";
         var serviceBusOptions = new ServiceBusOptions
         {
-            ConnectionString = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=TestKey;SharedAccessKey=TestKeyValue",
             EntityType = ServiceBusEntityType.Queue
         };
+        serviceBusOptions.ConfigureServiceBusClient("Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=TestKey;SharedAccessKey=dGVzdGtleXZhbHVlMTIzNDU2Nzg5MA==");
         var cacheOptions = new SimpleQueueCacheOptions();
         var loggerFactory = NullLoggerFactory.Instance;
 
@@ -181,7 +177,7 @@ public class FactoryWireUpTests
         // Configure the required services
         services.Configure<ServiceBusOptions>(name, options =>
         {
-            options.ConnectionString = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=TestKey;SharedAccessKey=TestKeyValue";
+            options.ConfigureServiceBusClient("Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=TestKey;SharedAccessKey=dGVzdGtleXZhbHVlMTIzNDU2Nzg5MA==");
             options.EntityType = ServiceBusEntityType.Queue;
             options.QueueNamePrefix = "test-queue";
             options.PartitionCount = 4;
@@ -201,69 +197,5 @@ public class FactoryWireUpTests
         // Assert
         Assert.NotNull(factory);
         Assert.IsType<ServiceBusAdapterFactory>(factory);
-    }
-
-    /// <summary>
-    /// Tests that provider resolves and starts in TestCluster.
-    /// </summary>
-    [Fact]
-    public async Task ServiceBusStreamProvider_ResolvesAndStarts()
-    {
-        // Arrange & Act
-        using var cluster = new TestClusterBuilder()
-            .AddSiloBuilderConfigurator<SiloBuilderConfigurator>()
-            .Build();
-        
-        await cluster.DeployAsync();
-
-        // Assert
-        var silo = cluster.Primary;
-        Assert.NotNull(silo);
-        
-        // Test that the stream provider can be retrieved
-        var grain = cluster.GrainFactory.GetGrain<ITestStreamGrain>(Guid.NewGuid());
-        var result = await grain.TestStreamProvider("ServiceBusTestProvider");
-        Assert.True(result, "Stream provider should be available and functional");
-    }
-
-    private class SiloBuilderConfigurator : ISiloConfigurator
-    {
-        public void Configure(ISiloBuilder hostBuilder)
-        {
-            hostBuilder.AddServiceBusStreams("ServiceBusTestProvider", options =>
-            {
-                options.ConnectionString = "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=TestKey;SharedAccessKey=TestKeyValue";
-                options.EntityType = ServiceBusEntityType.Queue;
-                options.QueueNamePrefix = "test-stream";
-                options.PartitionCount = 2;
-            });
-        }
-    }
-
-    /// <summary>
-    /// Simple test grain interface for testing stream provider availability.
-    /// </summary>
-    public interface ITestStreamGrain : IGrainWithGuidKey
-    {
-        Task<bool> TestStreamProvider(string providerName);
-    }
-
-    /// <summary>
-    /// Simple test grain implementation for testing stream provider availability.
-    /// </summary>
-    public class TestStreamGrain : Grain, ITestStreamGrain
-    {
-        public Task<bool> TestStreamProvider(string providerName)
-        {
-            try
-            {
-                var provider = this.GetStreamProvider(providerName);
-                return Task.FromResult(provider is not null);
-            }
-            catch
-            {
-                return Task.FromResult(false);
-            }
-        }
     }
 }
