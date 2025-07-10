@@ -66,7 +66,7 @@ public sealed class ServiceBusClientFactory : IAsyncDisposable
         }
 
         // Use semaphore to ensure only one client is created per options name
-        await _semaphore.WaitAsync().ConfigureAwait(false);
+        await _semaphore.WaitAsync();
         try
         {
             // Double-check pattern - another thread might have created the client
@@ -75,7 +75,7 @@ public sealed class ServiceBusClientFactory : IAsyncDisposable
                 return existingClient;
             }
 
-            return await CreateClientAsync(optionsName).ConfigureAwait(false);
+            return await CreateClientAsync(optionsName);
         }
         finally
         {
@@ -100,7 +100,7 @@ public sealed class ServiceBusClientFactory : IAsyncDisposable
         // Use factory function if available
         else if (options.CreateClient is not null)
         {
-            client = await options.CreateClient().ConfigureAwait(false);
+            client = await options.CreateClient();
         }
         else
         {
@@ -130,7 +130,7 @@ public sealed class ServiceBusClientFactory : IAsyncDisposable
             return;
         }
 
-        await _semaphore.WaitAsync().ConfigureAwait(false);
+        await _semaphore.WaitAsync();
         try
         {
             if (_disposed)
@@ -143,7 +143,7 @@ public sealed class ServiceBusClientFactory : IAsyncDisposable
             // Dispose all cached clients
             foreach (var client in _clients.Values)
             {
-                await client.DisposeAsync().ConfigureAwait(false);
+                await client.DisposeAsync();
             }
 
             _clients.Clear();
