@@ -42,6 +42,14 @@ public sealed partial class ServiceBusTopicAdapterReceiver : IQueueAdapterReceiv
     private ServiceBusProcessor? _processor;
     private volatile bool _disposed;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ServiceBusTopicAdapterReceiver"/> class.
+    /// </summary>
+    /// <param name="subscriptionName">The name of the Service Bus subscription.</param>
+    /// <param name="optionsName">The name of the options configuration.</param>
+    /// <param name="options">The Service Bus configuration options.</param>
+    /// <param name="clientFactory">The Service Bus client factory.</param>
+    /// <param name="logger">The logger instance.</param>
     public ServiceBusTopicAdapterReceiver(
         string subscriptionName,
         string optionsName,
@@ -56,6 +64,12 @@ public sealed partial class ServiceBusTopicAdapterReceiver : IQueueAdapterReceiv
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
+    /// <summary>
+    /// Initializes the receiver by creating and starting the Service Bus processor.
+    /// </summary>
+    /// <param name="timeout">The timeout for initialization (not used for Service Bus).</param>
+    /// <returns>A task representing the asynchronous initialization operation.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown when the receiver has been disposed.</exception>
     public async Task Initialize(TimeSpan timeout)
     {
         if (_disposed)
@@ -97,6 +111,11 @@ public sealed partial class ServiceBusTopicAdapterReceiver : IQueueAdapterReceiv
         }
     }
 
+    /// <summary>
+    /// Gets queue messages that have been received and are ready for processing.
+    /// </summary>
+    /// <param name="maxCount">The maximum number of messages to return. If 0 or negative, returns all available messages.</param>
+    /// <returns>A list of batch containers with the received messages.</returns>
     public async Task<IList<IBatchContainer>> GetQueueMessagesAsync(int maxCount)
     {
         if (_disposed || _processor is null)
@@ -124,6 +143,12 @@ public sealed partial class ServiceBusTopicAdapterReceiver : IQueueAdapterReceiv
         }
     }
 
+    /// <summary>
+    /// Notifies the receiver that the specified messages have been delivered successfully.
+    /// This is a no-op for Service Bus since messages are completed during processing.
+    /// </summary>
+    /// <param name="messages">The messages that have been delivered.</param>
+    /// <returns>A completed task.</returns>
     public Task MessagesDeliveredAsync(IList<IBatchContainer> messages)
     {
         // Service Bus messages are automatically completed in ProcessMessageAsync
@@ -131,6 +156,11 @@ public sealed partial class ServiceBusTopicAdapterReceiver : IQueueAdapterReceiv
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Shuts down the receiver by stopping the Service Bus processor.
+    /// </summary>
+    /// <param name="timeout">The timeout for shutdown operations.</param>
+    /// <returns>A task representing the asynchronous shutdown operation.</returns>
     public async Task Shutdown(TimeSpan timeout)
     {
         if (_disposed)
@@ -282,6 +312,10 @@ public sealed partial class ServiceBusTopicAdapterReceiver : IQueueAdapterReceiv
         return _options.QueueNamePrefix + "-topic";
     }
 
+    /// <summary>
+    /// Asynchronously releases all resources used by the <see cref="ServiceBusTopicAdapterReceiver"/>.
+    /// </summary>
+    /// <returns>A task representing the asynchronous dispose operation.</returns>
     public async ValueTask DisposeAsync()
     {
         if (_disposed)

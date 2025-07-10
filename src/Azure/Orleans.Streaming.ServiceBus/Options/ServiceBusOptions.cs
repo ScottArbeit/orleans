@@ -187,6 +187,11 @@ public class ServiceBusOptionsValidator : IConfigurationValidator
     private readonly ServiceBusOptions options;
     private readonly string name;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ServiceBusOptionsValidator"/> class.
+    /// </summary>
+    /// <param name="options">The Service Bus options to validate.</param>
+    /// <param name="name">The name of the stream provider.</param>
     private ServiceBusOptionsValidator(ServiceBusOptions options, string name)
     {
         this.options = options;
@@ -194,8 +199,9 @@ public class ServiceBusOptionsValidator : IConfigurationValidator
     }
 
     /// <summary>
-    /// Validates the configuration.
+    /// Validates the Service Bus options configuration for consistency and completeness.
     /// </summary>
+    /// <exception cref="OrleansConfigurationException">Thrown when configuration is invalid.</exception>
     public void ValidateConfiguration()
     {
         if (options.CreateClient is null && options.ServiceBusClient is null)
@@ -274,8 +280,11 @@ public class ServiceBusOptionsValidator : IConfigurationValidator
     }
 
     /// <summary>
-    /// Creates a validator instance.
+    /// Creates a new <see cref="ServiceBusOptionsValidator"/> instance for the specified options.
     /// </summary>
+    /// <param name="services">The service provider to retrieve options from.</param>
+    /// <param name="name">The name of the stream provider configuration.</param>
+    /// <returns>A configured validator instance.</returns>
     public static IConfigurationValidator Create(IServiceProvider services, string name)
     {
         var serviceBusOptions = services.GetOptionsByName<ServiceBusOptions>(name);

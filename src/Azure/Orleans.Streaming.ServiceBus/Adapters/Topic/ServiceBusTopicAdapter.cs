@@ -32,10 +32,29 @@ public sealed partial class ServiceBusTopicAdapter : IQueueAdapter, IAsyncDispos
     private readonly ConcurrentDictionary<string, ServiceBusSender> _senders = new();
     private volatile bool _disposed;
 
+    /// <summary>
+    /// Gets the name of the provider.
+    /// </summary>
     public string Name { get; }
+    
+    /// <summary>
+    /// Gets a value indicating whether the adapter supports rewinding.
+    /// </summary>
     public bool IsRewindable => false;
+    
+    /// <summary>
+    /// Gets the direction of the stream provider.
+    /// </summary>
     public StreamProviderDirection Direction => StreamProviderDirection.ReadWrite;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ServiceBusTopicAdapter"/> class.
+    /// </summary>
+    /// <param name="providerName">The name of the stream provider.</param>
+    /// <param name="options">The Service Bus configuration options.</param>
+    /// <param name="streamQueueMapper">The stream queue mapper for partitioning.</param>
+    /// <param name="clientFactory">The Service Bus client factory.</param>
+    /// <param name="loggerFactory">The logger factory.</param>
     public ServiceBusTopicAdapter(
         string providerName,
         ServiceBusOptions options,
@@ -53,6 +72,11 @@ public sealed partial class ServiceBusTopicAdapter : IQueueAdapter, IAsyncDispos
         Name = providerName;
     }
 
+    /// <summary>
+    /// Creates a receiver for the specified queue.
+    /// </summary>
+    /// <param name="queueId">The queue identifier.</param>
+    /// <returns>A queue adapter receiver instance.</returns>
     public IQueueAdapterReceiver CreateReceiver(QueueId queueId)
     {
         if (_disposed)
@@ -68,6 +92,17 @@ public sealed partial class ServiceBusTopicAdapter : IQueueAdapter, IAsyncDispos
         });
     }
 
+    /// <summary>
+    /// Queues a batch of messages to the Service Bus topic.
+    /// </summary>
+    /// <typeparam name="T">The type of events in the batch.</typeparam>
+    /// <param name="streamId">The stream identifier.</param>
+    /// <param name="events">The events to queue.</param>
+    /// <param name="token">The stream sequence token (not supported for Service Bus).</param>
+    /// <param name="requestContext">The request context containing additional properties.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    /// <exception cref="ArgumentException">Thrown when a non-null token is provided.</exception>
+    /// <exception cref="ObjectDisposedException">Thrown when the adapter has been disposed.</exception>
     public async Task QueueMessageBatchAsync<T>(
         StreamId streamId, 
         IEnumerable<T> events, 
@@ -169,6 +204,10 @@ public sealed partial class ServiceBusTopicAdapter : IQueueAdapter, IAsyncDispos
         return _options.QueueNamePrefix + "-topic";
     }
 
+    /// <summary>
+    /// Asynchronously releases all resources used by the <see cref="ServiceBusTopicAdapter"/>.
+    /// </summary>
+    /// <returns>A task representing the asynchronous dispose operation.</returns>
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
