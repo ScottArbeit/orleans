@@ -95,6 +95,17 @@ public class ServiceBusOptions
     public int PrefetchCount { get; set; } = 0;
 
     /// <summary>
+    /// Gets or sets the maximum number of messages to receive in a single batch from the Service Bus.
+    /// </summary>
+    /// <remarks>
+    /// The ReceiveBatchSize must be less than or equal to the PrefetchCount when PrefetchCount is greater than 0.
+    /// Setting ReceiveBatchSize higher than PrefetchCount can lead to reduced performance and increased latency
+    /// as the client will need to make multiple round trips to the service to fulfill the batch size requirement.
+    /// When PrefetchCount is 0 (disabled), ReceiveBatchSize operates independently without this constraint.
+    /// </remarks>
+    public int ReceiveBatchSize { get; set; } = 1;
+
+    /// <summary>
     /// Gets or sets the maximum number of concurrent calls for message processing.
     /// </summary>
     public int MaxConcurrentCalls { get; set; } = Environment.ProcessorCount;
@@ -223,6 +234,19 @@ public class ServiceBusOptionsValidator : IConfigurationValidator
         {
             throw new OrleansConfigurationException(
                 $"{nameof(ServiceBusOptions.PrefetchCount)} on ServiceBus stream provider '{name}' must be greater than or equal to 0.");
+        }
+
+        if (options.ReceiveBatchSize <= 0)
+        {
+            throw new OrleansConfigurationException(
+                $"{nameof(ServiceBusOptions.ReceiveBatchSize)} on ServiceBus stream provider '{name}' must be greater than 0.");
+        }
+
+        if (options.PrefetchCount > 0 && options.ReceiveBatchSize > options.PrefetchCount)
+        {
+            throw new OrleansConfigurationException(
+                $"{nameof(ServiceBusOptions.ReceiveBatchSize)} on ServiceBus stream provider '{name}' must be less than or equal to {nameof(ServiceBusOptions.PrefetchCount)} when PrefetchCount is greater than 0. " +
+                $"Current values: ReceiveBatchSize={options.ReceiveBatchSize}, PrefetchCount={options.PrefetchCount}.");
         }
 
         if (options.MaxConcurrentCalls <= 0)

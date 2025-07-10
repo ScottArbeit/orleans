@@ -25,6 +25,7 @@ public class ServiceBusOptionsTests
         Assert.Equal(TimeSpan.FromSeconds(5), options.MaxWaitTime);
         Assert.Equal("orleans-stream", options.QueueNamePrefix);
         Assert.Equal(0, options.PrefetchCount);
+        Assert.Equal(1, options.ReceiveBatchSize);
         Assert.Equal(Environment.ProcessorCount, options.MaxConcurrentCalls);
         Assert.Equal(10, options.MaxDeliveryAttempts);
         Assert.Null(options.ConnectionString);
