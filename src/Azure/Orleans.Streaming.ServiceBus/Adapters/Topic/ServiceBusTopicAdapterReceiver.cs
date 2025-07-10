@@ -20,15 +20,9 @@ namespace Orleans.Providers.Streams.ServiceBus;
 /// <summary>
 /// Receives batches of messages from a Service Bus topic subscription using ServiceBusProcessor.
 /// </summary>
-public sealed partial class ServiceBusTopicAdapterReceiver : IQueueAdapterReceiver, IAsyncDisposable
+public sealed partial class ServiceBusTopicAdapterReceiver : IQueueAdapterReceiver, IAsyncDisposable, ServiceBusInstrumentation.IBufferSizeProvider
 {
-    private static readonly Counter<int> MessagesProcessedCounter = ServiceBusInstrumentation.Meter.CreateCounter<int>(
-        "servicebus.topic.messages_processed",
-        description: "Number of Service Bus topic messages processed");
 
-    private static readonly Counter<int> MessagesDeadLetteredCounter = ServiceBusInstrumentation.Meter.CreateCounter<int>(
-        "servicebus.topic.dead_lettered",
-        description: "Number of Service Bus topic messages dead lettered");
 
     private readonly string _subscriptionName;
     private readonly ServiceBusOptions _options;
@@ -62,7 +56,16 @@ public sealed partial class ServiceBusTopicAdapterReceiver : IQueueAdapterReceiv
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        
+        // Register for buffer size monitoring
+        ServiceBusInstrumentation.RegisterReceiver($"topic-{_subscriptionName}", this);
     }
+
+    /// <summary>
+    /// Gets the current buffer size for telemetry purposes.
+    /// </summary>
+    /// <returns>The number of pending messages in the buffer.</returns>
+    public int GetBufferSize() => _pendingMessages.Count;
 
     /// <summary>
     /// Initializes the receiver by creating and starting the Service Bus processor.
@@ -77,10 +80,11 @@ public sealed partial class ServiceBusTopicAdapterReceiver : IQueueAdapterReceiv
             throw new ObjectDisposedException(nameof(ServiceBusTopicAdapterReceiver));
         }
 
-        using var activity = ServiceBusOptions.ActivitySource.StartActivity("receiver.initialize");
-        activity?.SetTag("messaging.system", "azureservicebus");
-        activity?.SetTag("messaging.destination.name", GetTopicName());
-        activity?.SetTag("messaging.servicebus.subscription.name", _subscriptionName);
+        using var activity = ServiceBusInstrumentation.ActivitySource.StartActivity(ServiceBusInstrumentation.Activities.ReceiverInitialize);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingSystem, ServiceBusInstrumentation.TagValues.MessagingSystemValue);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingDestinationName, GetTopicName());
+        activity?.SetTag(ServiceBusInstrumentation.Tags.ServiceBusEntityType, ServiceBusInstrumentation.TagValues.EntityTypeTopic);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.ServiceBusSubscriptionName, _subscriptionName);
 
         try
         {
@@ -195,11 +199,13 @@ public sealed partial class ServiceBusTopicAdapterReceiver : IQueueAdapterReceiv
 
     private async Task ProcessMessageAsync(ProcessMessageEventArgs args)
     {
-        using var activity = ServiceBusOptions.ActivitySource.StartActivity("message.process");
-        activity?.SetTag("messaging.system", "azureservicebus");
-        activity?.SetTag("messaging.destination.name", GetTopicName());
-        activity?.SetTag("messaging.servicebus.subscription.name", _subscriptionName);
-        activity?.SetTag("messaging.message.id", args.Message.MessageId);
+        using var activity = ServiceBusInstrumentation.ActivitySource.StartActivity(ServiceBusInstrumentation.Activities.TopicProcess);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingSystem, ServiceBusInstrumentation.TagValues.MessagingSystemValue);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingDestinationName, GetTopicName());
+        activity?.SetTag(ServiceBusInstrumentation.Tags.ServiceBusEntityType, ServiceBusInstrumentation.TagValues.EntityTypeTopic);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.ServiceBusSubscriptionName, _subscriptionName);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingMessageId, args.Message.MessageId);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingOperation, ServiceBusInstrumentation.TagValues.MessagingOperationProcess);
         activity?.SetTag("messaging.servicebus.delivery_count", args.Message.DeliveryCount);
 
         try
@@ -252,9 +258,9 @@ public sealed partial class ServiceBusTopicAdapterReceiver : IQueueAdapterReceiv
             await args.CompleteMessageAsync(args.Message);
 
             // Increment the processed counter
-            MessagesProcessedCounter.Add(1, 
-                new KeyValuePair<string, object?>("messaging.destination.name", GetTopicName()),
-                new KeyValuePair<string, object?>("messaging.servicebus.subscription.name", _subscriptionName));
+            ServiceBusInstrumentation.TopicMessagesProcessedCounter.Add(1, 
+                new KeyValuePair<string, object?>(ServiceBusInstrumentation.Tags.MessagingDestinationName, GetTopicName()),
+                new KeyValuePair<string, object?>(ServiceBusInstrumentation.Tags.ServiceBusSubscriptionName, _subscriptionName));
 
             LogMessageProcessed(args.Message.MessageId, GetTopicName(), _subscriptionName, args.Message.DeliveryCount);
         }
@@ -268,9 +274,9 @@ public sealed partial class ServiceBusTopicAdapterReceiver : IQueueAdapterReceiv
                 await args.DeadLetterMessageAsync(args.Message, "Max delivery attempts exceeded", ex.Message);
                 
                 // Increment dead letter counter
-                MessagesDeadLetteredCounter.Add(1,
-                    new KeyValuePair<string, object?>("messaging.destination.name", GetTopicName()),
-                    new KeyValuePair<string, object?>("messaging.servicebus.subscription.name", _subscriptionName));
+                ServiceBusInstrumentation.MessagesDeadLetteredCounter.Add(1,
+                    new KeyValuePair<string, object?>(ServiceBusInstrumentation.Tags.MessagingDestinationName, GetTopicName()),
+                    new KeyValuePair<string, object?>(ServiceBusInstrumentation.Tags.ServiceBusSubscriptionName, _subscriptionName));
 
                 LogMessageDeadLettered(args.Message.MessageId, GetTopicName(), _subscriptionName, args.Message.DeliveryCount, ex);
             }
@@ -285,10 +291,11 @@ public sealed partial class ServiceBusTopicAdapterReceiver : IQueueAdapterReceiv
 
     private Task ProcessErrorAsync(ProcessErrorEventArgs args)
     {
-        using var activity = ServiceBusOptions.ActivitySource.StartActivity("error.process");
-        activity?.SetTag("messaging.system", "azureservicebus");
-        activity?.SetTag("messaging.destination.name", GetTopicName());
-        activity?.SetTag("messaging.servicebus.subscription.name", _subscriptionName);
+        using var activity = ServiceBusInstrumentation.ActivitySource.StartActivity("error.process");
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingSystem, ServiceBusInstrumentation.TagValues.MessagingSystemValue);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingDestinationName, GetTopicName());
+        activity?.SetTag(ServiceBusInstrumentation.Tags.ServiceBusEntityType, ServiceBusInstrumentation.TagValues.EntityTypeTopic);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.ServiceBusSubscriptionName, _subscriptionName);
         activity?.SetStatus(ActivityStatusCode.Error, args.Exception.Message);
 
         LogProcessorError(args.Exception, GetTopicName(), _subscriptionName, args.ErrorSource.ToString());
@@ -324,6 +331,9 @@ public sealed partial class ServiceBusTopicAdapterReceiver : IQueueAdapterReceiv
         }
 
         _disposed = true;
+
+        // Unregister from buffer size monitoring
+        ServiceBusInstrumentation.UnregisterReceiver($"topic-{_subscriptionName}");
 
         try
         {

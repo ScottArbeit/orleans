@@ -121,9 +121,10 @@ public sealed partial class ServiceBusTopicAdapter : IQueueAdapter, IAsyncDispos
             throw new ArgumentException("ServiceBus stream provider does not support non-null StreamSequenceToken.", nameof(token));
         }
 
-        using var activity = ServiceBusOptions.ActivitySource.StartActivity("message.send");
-        activity?.SetTag("messaging.system", "azureservicebus");
-        activity?.SetTag("messaging.operation", "send");
+        using var activity = ServiceBusInstrumentation.ActivitySource.StartActivity("message.send");
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingSystem, ServiceBusInstrumentation.TagValues.MessagingSystemValue);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingOperation, "send");
+        activity?.SetTag(ServiceBusInstrumentation.Tags.ServiceBusEntityType, ServiceBusInstrumentation.TagValues.EntityTypeTopic);
 
         try
         {
@@ -133,7 +134,7 @@ public sealed partial class ServiceBusTopicAdapter : IQueueAdapter, IAsyncDispos
             // For topics, we send to the topic name, not the subscription
             var topicName = GetTopicName();
             
-            activity?.SetTag("messaging.destination.name", topicName);
+            activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingDestinationName, topicName);
 
             var sender = await GetOrCreateSenderAsync(topicName);
 

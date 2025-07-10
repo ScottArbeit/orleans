@@ -50,9 +50,7 @@ namespace Orleans.Providers.Streams.ServiceBus;
 /// </example>
 public class ServiceBusAdapterFactory : IQueueAdapterFactory
 {
-    private static readonly Counter<int> FactoryInitializedCounter = ServiceBusInstrumentation.Meter.CreateCounter<int>(
-        "servicebus.factory.initialized",
-        description: "Number of ServiceBus adapter factories initialized");
+
 
     private readonly string providerName;
     private readonly ServiceBusOptions options;
@@ -98,7 +96,7 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
                 ((qid) => Task.FromResult<IStreamFailureHandler>(new NoOpStreamDeliveryFailureHandler()));
         
         // Increment the factory initialized counter
-        FactoryInitializedCounter.Add(1, new KeyValuePair<string, object?>("servicebus.provider_name", this.providerName));
+        ServiceBusInstrumentation.FactoryInitializedCounter.Add(1, new KeyValuePair<string, object?>(ServiceBusInstrumentation.Tags.ServiceBusOptionsName, this.providerName));
     }
 
     /// <summary>
