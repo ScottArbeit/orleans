@@ -73,6 +73,11 @@ public class ServiceBusOptions
     public int PrefetchCount { get; set; } = 0;
 
     /// <summary>
+    /// Gets or sets the maximum number of concurrent calls for message processing.
+    /// </summary>
+    public int MaxConcurrentCalls { get; set; } = Environment.ProcessorCount;
+
+    /// <summary>
     /// Gets or sets the maximum number of delivery attempts for a message.
     /// </summary>
     public int MaxDeliveryAttempts { get; set; } = 10;
@@ -193,6 +198,12 @@ public class ServiceBusOptionsValidator : IConfigurationValidator
         {
             throw new OrleansConfigurationException(
                 $"{nameof(ServiceBusOptions.PrefetchCount)} on ServiceBus stream provider '{name}' must be greater than or equal to 0.");
+        }
+
+        if (options.MaxConcurrentCalls <= 0)
+        {
+            throw new OrleansConfigurationException(
+                $"{nameof(ServiceBusOptions.MaxConcurrentCalls)} on ServiceBus stream provider '{name}' must be greater than 0.");
         }
 
         if (options.MaxDeliveryAttempts <= 0)

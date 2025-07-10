@@ -3,9 +3,11 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Orleans.Configuration;
 using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
+using Orleans.Streaming.ServiceBus;
 using Orleans.Streams;
 
 namespace Orleans.Providers.Streams.ServiceBus;
@@ -57,8 +59,10 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
     /// </summary>
     public virtual Task<IQueueAdapter> CreateAdapter()
     {
-        // Placeholder - would create actual ServiceBusAdapter
-        throw new NotImplementedException("ServiceBus adapter implementation is not yet available. This is a skeleton package.");
+        var optionsMonitor = new OptionsWrapper<ServiceBusOptions>(options);
+        var clientFactory = new ServiceBusClientFactory(optionsMonitor);
+        var adapter = new ServiceBusQueueAdapter(providerName, options, streamQueueMapper, clientFactory, loggerFactory);
+        return Task.FromResult<IQueueAdapter>(adapter);
     }
 
     /// <summary>
@@ -115,4 +119,23 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
         factory.Init();
         return factory;
     }
+}
+
+/// <summary>
+/// A simple wrapper to convert IOptions to IOptionsMonitor.
+/// </summary>
+internal class OptionsWrapper<T> : IOptionsMonitor<T>
+{
+    private readonly T _value;
+
+    public OptionsWrapper(T value)
+    {
+        _value = value;
+    }
+
+    public T CurrentValue => _value;
+
+    public T Get(string? name) => _value;
+
+    public IDisposable? OnChange(Action<T, string?> listener) => null;
 }
