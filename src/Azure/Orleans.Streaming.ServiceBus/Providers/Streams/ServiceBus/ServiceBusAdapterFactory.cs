@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -15,8 +16,44 @@ namespace Orleans.Providers.Streams.ServiceBus;
 /// <summary>
 /// Factory class for Azure Service Bus based stream provider.
 /// </summary>
+/// <example>
+/// Configure a silo to use Azure Service Bus queues:
+/// <code>
+/// var siloBuilder = new HostBuilder()
+///     .UseOrleans(silo =>
+///     {
+///         silo.AddServiceBusStreams("MyStreamProvider", options =>
+///         {
+///             options.ConfigureServiceBusClient("YourConnectionString");
+///             options.EntityType = ServiceBusEntityType.Queue;
+///             options.QueueNamePrefix = "orleans-stream";
+///             options.PartitionCount = 8;
+///         });
+///     });
+/// </code>
+/// 
+/// Configure a silo to use Azure Service Bus topics:
+/// <code>
+/// var siloBuilder = new HostBuilder()
+///     .UseOrleans(silo =>
+///     {
+///         silo.AddServiceBusStreams("MyStreamProvider", options =>
+///         {
+///             options.ConfigureServiceBusClient("YourConnectionString");
+///             options.EntityType = ServiceBusEntityType.Topic;
+///             options.EntityName = "my-topic";
+///             options.SubscriptionNamePrefix = "orleans-subscription";
+///             options.PartitionCount = 4;
+///         });
+///     });
+/// </code>
+/// </example>
 public class ServiceBusAdapterFactory : IQueueAdapterFactory
 {
+    private static readonly Counter<int> FactoryInitializedCounter = ServiceBusInstrumentation.Meter.CreateCounter<int>(
+        "servicebus.factory.initialized",
+        description: "Number of ServiceBus adapter factories initialized");
+
     private readonly string providerName;
     private readonly ServiceBusOptions options;
     private readonly ILoggerFactory loggerFactory;
@@ -59,6 +96,9 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
     {
         this.StreamFailureHandlerFactory = this.StreamFailureHandlerFactory ??
                 ((qid) => Task.FromResult<IStreamFailureHandler>(new NoOpStreamDeliveryFailureHandler()));
+        
+        // Increment the factory initialized counter
+        FactoryInitializedCounter.Add(1, new KeyValuePair<string, object?>("servicebus.provider_name", this.providerName));
     }
 
     /// <summary>
