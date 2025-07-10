@@ -28,6 +28,13 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
     /// </summary>
     protected Func<QueueId, Task<IStreamFailureHandler>>? StreamFailureHandlerFactory { private get; set; }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ServiceBusAdapterFactory"/> class.
+    /// </summary>
+    /// <param name="name">The name of the stream provider.</param>
+    /// <param name="options">The Service Bus configuration options.</param>
+    /// <param name="cacheOptions">The queue cache configuration options.</param>
+    /// <param name="loggerFactory">The logger factory.</param>
     public ServiceBusAdapterFactory(
         string name,
         ServiceBusOptions options,
@@ -46,7 +53,7 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
     }
 
     /// <summary>
-    /// Init the factory.
+    /// Initializes the factory with default stream failure handler.
     /// </summary>
     public virtual void Init()
     {
@@ -55,37 +62,47 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
     }
 
     /// <summary>
-    /// Creates the Azure Service Bus based adapter.
+    /// Creates the appropriate Azure Service Bus adapter based on the configured entity type.
     /// </summary>
+    /// <returns>A queue adapter instance (either queue or topic based).</returns>
     public virtual Task<IQueueAdapter> CreateAdapter()
     {
         var optionsMonitor = new OptionsWrapper<ServiceBusOptions>(options);
         var clientFactory = new ServiceBusClientFactory(optionsMonitor);
-        var adapter = new ServiceBusQueueAdapter(providerName, options, streamQueueMapper, clientFactory, loggerFactory);
-        return Task.FromResult<IQueueAdapter>(adapter);
+        
+        IQueueAdapter adapter = options.EntityType switch
+        {
+            ServiceBusEntityType.Queue => new ServiceBusQueueAdapter(providerName, options, streamQueueMapper, clientFactory, loggerFactory),
+            ServiceBusEntityType.Topic => new ServiceBusTopicAdapter(providerName, options, streamQueueMapper, clientFactory, loggerFactory),
+            _ => throw new ArgumentOutOfRangeException(nameof(options.EntityType), options.EntityType, "Unsupported Service Bus entity type")
+        };
+        
+        return Task.FromResult(adapter);
     }
 
     /// <summary>
-    /// Creates the adapter cache.
+    /// Gets the queue adapter cache for caching stream messages.
     /// </summary>
+    /// <returns>The queue adapter cache instance.</returns>
     public virtual IQueueAdapterCache GetQueueAdapterCache()
     {
         return adapterCache;
     }
 
     /// <summary>
-    /// Creates the factory stream queue mapper.
+    /// Gets the stream queue mapper for mapping streams to queue partitions.
     /// </summary>
+    /// <returns>The stream queue mapper instance.</returns>
     public IStreamQueueMapper GetStreamQueueMapper()
     {
         return streamQueueMapper;
     }
 
     /// <summary>
-    /// Creates a delivery failure handler for the specified queue.
+    /// Gets a delivery failure handler for the specified queue.
     /// </summary>
-    /// <param name="queueId"></param>
-    /// <returns></returns>
+    /// <param name="queueId">The queue identifier.</param>
+    /// <returns>A stream failure handler instance.</returns>
     public Task<IStreamFailureHandler> GetDeliveryFailureHandler(QueueId queueId)
     {
         return StreamFailureHandlerFactory?.Invoke(queueId) ?? Task.FromResult<IStreamFailureHandler>(new NoOpStreamDeliveryFailureHandler());
@@ -93,6 +110,13 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
 
     private static List<string> GetEntityNames(ServiceBusOptions options)
     {
+        if (options.EntityType == ServiceBusEntityType.Topic)
+        {
+            // For topics, return subscription names for partitioning
+            return GetSubscriptionNames(options);
+        }
+
+        // For queues, return queue names
         // If specific entity names are provided, use them
         if (options.EntityNames is not null && options.EntityNames.Count > 0)
         {
@@ -111,6 +135,32 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
             options.PartitionCount);
     }
 
+    private static List<string> GetSubscriptionNames(ServiceBusOptions options)
+    {
+        // If specific subscription names are provided, use them
+        if (options.SubscriptionNames is not null && options.SubscriptionNames.Count > 0)
+        {
+            return options.SubscriptionNames;
+        }
+
+        // If a single subscription name is provided, use it for all partitions
+        if (!string.IsNullOrWhiteSpace(options.SubscriptionName))
+        {
+            return [options.SubscriptionName];
+        }
+
+        // Generate subscription names based on partition count and prefix
+        return ServiceBusStreamProviderUtils.GenerateDefaultServiceBusSubscriptionNames(
+            options.SubscriptionNamePrefix, 
+            options.PartitionCount);
+    }
+
+    /// <summary>
+    /// Creates and initializes a new instance of the <see cref="ServiceBusAdapterFactory"/> class.
+    /// </summary>
+    /// <param name="services">The service provider.</param>
+    /// <param name="name">The name of the stream provider.</param>
+    /// <returns>A configured and initialized ServiceBusAdapterFactory instance.</returns>
     public static ServiceBusAdapterFactory Create(IServiceProvider services, string name)
     {
         var serviceBusOptions = services.GetOptionsByName<ServiceBusOptions>(name);
@@ -122,20 +172,38 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
 }
 
 /// <summary>
-/// A simple wrapper to convert IOptions to IOptionsMonitor.
+/// A simple wrapper to convert IOptions to IOptionsMonitor for Service Bus client factory.
 /// </summary>
+/// <typeparam name="T">The type of options.</typeparam>
 internal class OptionsWrapper<T> : IOptionsMonitor<T>
 {
     private readonly T _value;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="OptionsWrapper{T}"/> class.
+    /// </summary>
+    /// <param name="value">The options value to wrap.</param>
     public OptionsWrapper(T value)
     {
         _value = value;
     }
 
+    /// <summary>
+    /// Gets the current value of the options.
+    /// </summary>
     public T CurrentValue => _value;
 
+    /// <summary>
+    /// Gets the options value for the specified name.
+    /// </summary>
+    /// <param name="name">The name of the options (ignored in this implementation).</param>
+    /// <returns>The options value.</returns>
     public T Get(string? name) => _value;
 
+    /// <summary>
+    /// Registers a listener for option changes (no-op in this implementation).
+    /// </summary>
+    /// <param name="listener">The change listener.</param>
+    /// <returns>Always returns null as changes are not supported.</returns>
     public IDisposable? OnChange(Action<T, string?> listener) => null;
 }
