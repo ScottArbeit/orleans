@@ -182,6 +182,53 @@ public class TopicAdapterTests
     }
 
     [Fact]
+    public void ServiceBusTopicAdapter_MultipleSubscriptions_ShouldDistributeStreamsAcrossSubscriptions()
+    {
+        // Arrange
+        var loggerFactory = NullLoggerFactory.Instance;
+        var serviceBusOptions = new ServiceBusOptions
+        {
+            EntityType = ServiceBusEntityType.Topic,
+            SubscriptionNames = new List<string> { "subscription-1", "subscription-2" }
+        };
+
+        // Create factory to test subscription distribution
+        var cacheOptions = new SimpleQueueCacheOptions();
+        var factory = new ServiceBusAdapterFactory(
+            "test-provider",
+            serviceBusOptions,
+            cacheOptions,
+            loggerFactory);
+
+        factory.Init();
+
+        // Get the queue mapper to test stream distribution
+        var queueMapper = factory.GetStreamQueueMapper();
+        var allQueues = queueMapper.GetAllQueues().ToList();
+
+        // Assert that we have the expected number of queues (one per subscription)
+        Assert.Equal(2, allQueues.Count);
+
+        // Test that different streams get mapped to different queues
+        var stream1 = StreamId.Create("test-namespace", "stream-1");
+        var stream2 = StreamId.Create("test-namespace", "stream-2");
+        var stream3 = StreamId.Create("test-namespace", "stream-3");
+
+        var queue1 = queueMapper.GetQueueForStream(stream1);
+        var queue2 = queueMapper.GetQueueForStream(stream2);
+        var queue3 = queueMapper.GetQueueForStream(stream3);
+
+        // Verify streams are distributed (at least one different mapping)
+        var distinctQueues = new[] { queue1, queue2, queue3 }.Distinct().Count();
+        Assert.True(distinctQueues > 1, "Streams should be distributed across multiple subscriptions");
+
+        // Verify all mapped queues are in our expected list
+        Assert.Contains(queue1, allQueues);
+        Assert.Contains(queue2, allQueues);
+        Assert.Contains(queue3, allQueues);
+    }
+
+    [Fact]
     public async Task ServiceBusAdapterFactory_CreateAdapter_WithTopicEntityType_ShouldReturnTopicAdapter()
     {
         // Arrange
@@ -319,6 +366,112 @@ public class ServiceBusTopicOptionsTests
         var exception = Assert.Throws<OrleansConfigurationException>(() => validator.ValidateConfiguration());
         Assert.Contains("SubscriptionNamePrefix on ServiceBus stream provider", exception.Message);
         Assert.Contains("cannot be null or empty when using topics", exception.Message);
+    }
+}
+
+[TestCategory("BVT")]
+[TestCategory("ServiceBus")]
+[TestCategory("Utils")]
+public class ServiceBusUtilsTests
+{
+    [Fact]
+    public void ServiceBusStreamProviderUtils_GenerateDefaultServiceBusSubscriptionNames_ShouldGenerateCorrectNames()
+    {
+        // Arrange
+        var prefix = "test-subscription";
+        var count = 3;
+
+        // Act
+        var subscriptionNames = ServiceBusStreamProviderUtils.GenerateDefaultServiceBusSubscriptionNames(prefix, count);
+
+        // Assert
+        Assert.Equal(3, subscriptionNames.Count);
+        Assert.Equal("test-subscription-00", subscriptionNames[0]);
+        Assert.Equal("test-subscription-01", subscriptionNames[1]);
+        Assert.Equal("test-subscription-02", subscriptionNames[2]);
+    }
+
+    [Fact]
+    public void ServiceBusStreamProviderUtils_GenerateDefaultServiceBusSubscriptionNamesWithServiceIdAndProvider_ShouldGenerateCorrectNames()
+    {
+        // Arrange
+        var serviceId = "myservice";
+        var providerName = "myprovider";
+
+        // Act
+        var subscriptionNames = ServiceBusStreamProviderUtils.GenerateDefaultServiceBusSubscriptionNames(serviceId, providerName);
+
+        // Assert
+        Assert.Equal(8, subscriptionNames.Count); // Default count is 8
+        Assert.Equal("myservice-myprovider-00", subscriptionNames[0]);
+        Assert.Equal("myservice-myprovider-01", subscriptionNames[1]);
+        Assert.Equal("myservice-myprovider-07", subscriptionNames[7]);
+    }
+
+    [Fact]
+    public void ServiceBusAdapterFactory_GetEntityNames_WithTopicEntityType_ShouldReturnSubscriptionNames()
+    {
+        // Arrange
+        var loggerFactory = NullLoggerFactory.Instance;
+        var serviceBusOptions = new ServiceBusOptions
+        {
+            EntityType = ServiceBusEntityType.Topic,
+            SubscriptionNames = new List<string> { "sub-1", "sub-2" }
+        };
+        var cacheOptions = new SimpleQueueCacheOptions();
+
+        // Act
+        var factory = new ServiceBusAdapterFactory("test-provider", serviceBusOptions, cacheOptions, loggerFactory);
+        var queueMapper = factory.GetStreamQueueMapper();
+        var allQueues = queueMapper.GetAllQueues().ToList();
+
+        // Assert - For topics, the "queues" are actually subscription names
+        Assert.Equal(2, allQueues.Count);
+        
+        // Verify the subscription names are used as the partition names in the mapper
+        if (queueMapper is HashRingBasedPartitionedStreamQueueMapper partitionedMapper)
+        {
+            var partitionNames = allQueues.Select(q => partitionedMapper.QueueToPartition(q)).ToList();
+            Assert.Contains("sub-1", partitionNames);
+            Assert.Contains("sub-2", partitionNames);
+        }
+        else
+        {
+            Assert.Fail("Expected HashRingBasedPartitionedStreamQueueMapper");
+        }
+    }
+
+    [Fact]
+    public void ServiceBusAdapterFactory_GetEntityNames_WithQueueEntityType_ShouldReturnQueueNames()
+    {
+        // Arrange
+        var loggerFactory = NullLoggerFactory.Instance;
+        var serviceBusOptions = new ServiceBusOptions
+        {
+            EntityType = ServiceBusEntityType.Queue,
+            EntityNames = new List<string> { "queue-1", "queue-2" }
+        };
+        var cacheOptions = new SimpleQueueCacheOptions();
+
+        // Act
+        var factory = new ServiceBusAdapterFactory("test-provider", serviceBusOptions, cacheOptions, loggerFactory);
+        var queueMapper = factory.GetStreamQueueMapper();
+        var allQueues = queueMapper.GetAllQueues().ToList();
+
+        // Assert
+        Assert.Equal(2, allQueues.Count);
+        
+        // Verify the queue names are used as the partition names in the mapper
+        if (queueMapper is HashRingBasedPartitionedStreamQueueMapper partitionedMapper)
+        {
+            var partitionNames = allQueues.Select(q => partitionedMapper.QueueToPartition(q)).ToList();
+            Assert.Contains("queue-1", partitionNames);
+            Assert.Contains("queue-2", partitionNames);
+        }
+        else
+        {
+            Assert.Fail("Expected HashRingBasedPartitionedStreamQueueMapper");
+        }
     }
 }
 
