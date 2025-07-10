@@ -68,6 +68,23 @@ public class ServiceBusOptions
     public List<string>? EntityNames { get; set; }
 
     /// <summary>
+    /// Gets or sets the subscription name to use when EntityType is Topic.
+    /// If not specified, subscription names will be generated based on SubscriptionNamePrefix and PartitionCount.
+    /// </summary>
+    public string? SubscriptionName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the list of subscription names to use for partitioning when EntityType is Topic.
+    /// If not specified, subscription names will be generated based on SubscriptionNamePrefix and PartitionCount.
+    /// </summary>
+    public List<string>? SubscriptionNames { get; set; }
+
+    /// <summary>
+    /// Gets or sets the prefix for subscription names when auto-generating subscription names for topics.
+    /// </summary>
+    public string SubscriptionNamePrefix { get; set; } = "orleans-subscription";
+
+    /// <summary>
     /// Gets or sets the number of messages to prefetch from the Service Bus.
     /// </summary>
     public int PrefetchCount { get; set; } = 0;
@@ -230,6 +247,29 @@ public class ServiceBusOptionsValidator : IConfigurationValidator
         {
             throw new OrleansConfigurationException(
                 $"Cannot specify both {nameof(ServiceBusOptions.EntityName)} and {nameof(ServiceBusOptions.EntityNames)} on ServiceBus stream provider '{name}'.");
+        }
+
+        // Validate subscription name configuration for topics
+        if (options.EntityType == ServiceBusEntityType.Topic)
+        {
+            if (!string.IsNullOrWhiteSpace(options.SubscriptionName) && options.SubscriptionNames is not null && options.SubscriptionNames.Count > 0)
+            {
+                throw new OrleansConfigurationException(
+                    $"Cannot specify both {nameof(ServiceBusOptions.SubscriptionName)} and {nameof(ServiceBusOptions.SubscriptionNames)} on ServiceBus stream provider '{name}'.");
+            }
+
+            if (string.IsNullOrWhiteSpace(options.SubscriptionNamePrefix))
+            {
+                throw new OrleansConfigurationException(
+                    $"{nameof(ServiceBusOptions.SubscriptionNamePrefix)} on ServiceBus stream provider '{name}' cannot be null or empty when using topics.");
+            }
+
+            // If SubscriptionNames is specified, it should have at least one entry
+            if (options.SubscriptionNames is not null && options.SubscriptionNames.Count == 0)
+            {
+                throw new OrleansConfigurationException(
+                    $"{nameof(ServiceBusOptions.SubscriptionNames)} on ServiceBus stream provider '{name}' cannot be empty when specified.");
+            }
         }
     }
 

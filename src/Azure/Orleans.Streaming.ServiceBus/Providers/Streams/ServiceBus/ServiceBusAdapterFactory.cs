@@ -61,8 +61,15 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
     {
         var optionsMonitor = new OptionsWrapper<ServiceBusOptions>(options);
         var clientFactory = new ServiceBusClientFactory(optionsMonitor);
-        var adapter = new ServiceBusQueueAdapter(providerName, options, streamQueueMapper, clientFactory, loggerFactory);
-        return Task.FromResult<IQueueAdapter>(adapter);
+        
+        IQueueAdapter adapter = options.EntityType switch
+        {
+            ServiceBusEntityType.Queue => new ServiceBusQueueAdapter(providerName, options, streamQueueMapper, clientFactory, loggerFactory),
+            ServiceBusEntityType.Topic => new ServiceBusTopicAdapter(providerName, options, streamQueueMapper, clientFactory, loggerFactory),
+            _ => throw new ArgumentOutOfRangeException(nameof(options.EntityType), options.EntityType, "Unsupported Service Bus entity type")
+        };
+        
+        return Task.FromResult(adapter);
     }
 
     /// <summary>
@@ -93,6 +100,13 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
 
     private static List<string> GetEntityNames(ServiceBusOptions options)
     {
+        if (options.EntityType == ServiceBusEntityType.Topic)
+        {
+            // For topics, return subscription names for partitioning
+            return GetSubscriptionNames(options);
+        }
+
+        // For queues, return queue names
         // If specific entity names are provided, use them
         if (options.EntityNames is not null && options.EntityNames.Count > 0)
         {
@@ -108,6 +122,26 @@ public class ServiceBusAdapterFactory : IQueueAdapterFactory
         // Generate entity names based on partition count and prefix
         return ServiceBusStreamProviderUtils.GenerateDefaultServiceBusQueueNames(
             options.QueueNamePrefix, 
+            options.PartitionCount);
+    }
+
+    private static List<string> GetSubscriptionNames(ServiceBusOptions options)
+    {
+        // If specific subscription names are provided, use them
+        if (options.SubscriptionNames is not null && options.SubscriptionNames.Count > 0)
+        {
+            return options.SubscriptionNames;
+        }
+
+        // If a single subscription name is provided, use it for all partitions
+        if (!string.IsNullOrWhiteSpace(options.SubscriptionName))
+        {
+            return [options.SubscriptionName];
+        }
+
+        // Generate subscription names based on partition count and prefix
+        return ServiceBusStreamProviderUtils.GenerateDefaultServiceBusSubscriptionNames(
+            options.SubscriptionNamePrefix, 
             options.PartitionCount);
     }
 
