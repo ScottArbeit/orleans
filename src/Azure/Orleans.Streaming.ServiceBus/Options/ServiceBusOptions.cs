@@ -30,6 +30,11 @@ public enum ServiceBusEntityType
 /// </summary>
 public class ServiceBusOptions
 {
+    /// <summary>
+    /// Gets the ActivitySource for ServiceBus telemetry.
+    /// </summary>
+    public static ActivitySource ActivitySource { get; } = new("Orleans.ServiceBus", "1.0.0");
+
     private ServiceBusClient? _serviceBusClient;
 
     /// <summary>
