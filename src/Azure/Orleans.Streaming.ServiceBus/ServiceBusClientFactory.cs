@@ -154,12 +154,6 @@ public sealed class ServiceBusClientFactory : IAsyncDisposable
     }
 }
 
-     _semaphore.Release();
-            _semaphore.Dispose();
-        }
-    }
-}
-
 /// <summary>
 /// Contains ServiceBus instrumentation infrastructure.
 /// </summary>
