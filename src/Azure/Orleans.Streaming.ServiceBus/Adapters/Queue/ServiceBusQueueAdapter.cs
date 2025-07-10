@@ -86,16 +86,17 @@ public sealed partial class ServiceBusQueueAdapter : IQueueAdapter, IAsyncDispos
             throw new ArgumentException("ServiceBus stream provider does not support non-null StreamSequenceToken.", nameof(token));
         }
 
-        using var activity = ServiceBusOptions.ActivitySource.StartActivity("message.send");
-        activity?.SetTag("messaging.system", "azureservicebus");
-        activity?.SetTag("messaging.operation", "send");
+        using var activity = ServiceBusInstrumentation.ActivitySource.StartActivity("message.send");
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingSystem, ServiceBusInstrumentation.TagValues.MessagingSystemValue);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingOperation, "send");
+        activity?.SetTag(ServiceBusInstrumentation.Tags.ServiceBusEntityType, ServiceBusInstrumentation.TagValues.EntityTypeQueue);
 
         try
         {
             var queueId = _streamQueueMapper.GetQueueForStream(streamId);
             var queueName = _streamQueueMapper.QueueToPartition(queueId);
             
-            activity?.SetTag("messaging.destination.name", queueName);
+            activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingDestinationName, queueName);
 
             var sender = await GetOrCreateSenderAsync(queueName);
 

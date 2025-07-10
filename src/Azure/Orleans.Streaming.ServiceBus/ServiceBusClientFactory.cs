@@ -21,9 +21,7 @@ namespace Orleans.Streaming.ServiceBus;
 /// </summary>
 public sealed class ServiceBusClientFactory : IAsyncDisposable
 {
-    private static readonly Counter<int> ClientCreatedCounter = ServiceBusInstrumentation.Meter.CreateCounter<int>(
-        "servicebus.client.created",
-        description: "Number of ServiceBus clients created");
+
 
     private readonly ConcurrentDictionary<string, ServiceBusClient> _clients = new();
     private readonly SemaphoreSlim _semaphore = new(1, 1);
@@ -85,8 +83,8 @@ public sealed class ServiceBusClientFactory : IAsyncDisposable
 
     private async Task<ServiceBusClient> CreateClientAsync(string optionsName)
     {
-        using var activity = ServiceBusOptions.ActivitySource.StartActivity("client.create");
-        activity?.SetTag("servicebus.options_name", optionsName);
+        using var activity = ServiceBusInstrumentation.ActivitySource.StartActivity(ServiceBusInstrumentation.Activities.ClientCreate);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.ServiceBusOptionsName, optionsName);
 
         var options = _optionsMonitor.Get(optionsName);
 

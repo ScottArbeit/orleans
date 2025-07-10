@@ -132,10 +132,7 @@ public class ServiceBusOptions
     /// </summary>
     internal Func<Task<ServiceBusClient>>? CreateClient { get; private set; }
 
-    /// <summary>
-    /// Gets the ActivitySource for Service Bus telemetry.
-    /// </summary>
-    public static ActivitySource ActivitySource { get; } = new("Orleans.ServiceBus");
+
 
     /// <summary>
     /// Configures the ServiceBusClient using a connection string.

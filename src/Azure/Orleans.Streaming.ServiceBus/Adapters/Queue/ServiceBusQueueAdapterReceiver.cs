@@ -20,7 +20,7 @@ namespace Orleans.Providers.Streams.ServiceBus;
 /// <summary>
 /// Receives batches of messages from a Service Bus queue using ServiceBusProcessor.
 /// </summary>
-public sealed partial class ServiceBusQueueAdapterReceiver : IQueueAdapterReceiver, IAsyncDisposable
+public sealed partial class ServiceBusQueueAdapterReceiver : IQueueAdapterReceiver, IAsyncDisposable, ServiceBusInstrumentation.IBufferSizeProvider
 {
     private static readonly Counter<int> MessagesProcessedCounter = ServiceBusInstrumentation.Meter.CreateCounter<int>(
         "servicebus.queue.messages_processed",
@@ -50,7 +50,16 @@ public sealed partial class ServiceBusQueueAdapterReceiver : IQueueAdapterReceiv
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        
+        // Register for buffer size monitoring
+        ServiceBusInstrumentation.RegisterReceiver($"queue-{_queueName}", this);
     }
+
+    /// <summary>
+    /// Gets the current buffer size for telemetry purposes.
+    /// </summary>
+    /// <returns>The number of pending messages in the buffer.</returns>
+    public int GetBufferSize() => _pendingMessages.Count;
 
     public async Task Initialize(TimeSpan timeout)
     {
@@ -59,9 +68,10 @@ public sealed partial class ServiceBusQueueAdapterReceiver : IQueueAdapterReceiv
             throw new ObjectDisposedException(nameof(ServiceBusQueueAdapterReceiver));
         }
 
-        using var activity = ServiceBusOptions.ActivitySource.StartActivity("receiver.initialize");
-        activity?.SetTag("messaging.system", "azureservicebus");
-        activity?.SetTag("messaging.destination.name", _queueName);
+        using var activity = ServiceBusInstrumentation.ActivitySource.StartActivity(ServiceBusInstrumentation.Activities.ReceiverInitialize);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingSystem, ServiceBusInstrumentation.TagValues.MessagingSystemValue);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingDestinationName, _queueName);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.ServiceBusEntityType, ServiceBusInstrumentation.TagValues.EntityTypeQueue);
 
         try
         {
@@ -159,10 +169,12 @@ public sealed partial class ServiceBusQueueAdapterReceiver : IQueueAdapterReceiv
 
     private async Task ProcessMessageAsync(ProcessMessageEventArgs args)
     {
-        using var activity = ServiceBusOptions.ActivitySource.StartActivity("message.process");
-        activity?.SetTag("messaging.system", "azureservicebus");
-        activity?.SetTag("messaging.destination.name", _queueName);
-        activity?.SetTag("messaging.message.id", args.Message.MessageId);
+        using var activity = ServiceBusInstrumentation.ActivitySource.StartActivity(ServiceBusInstrumentation.Activities.QueueProcess);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingSystem, ServiceBusInstrumentation.TagValues.MessagingSystemValue);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingDestinationName, _queueName);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingMessageId, args.Message.MessageId);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingOperation, ServiceBusInstrumentation.TagValues.MessagingOperationProcess);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.ServiceBusEntityType, ServiceBusInstrumentation.TagValues.EntityTypeQueue);
         activity?.SetTag("messaging.servicebus.delivery_count", args.Message.DeliveryCount);
 
         try
@@ -213,8 +225,8 @@ public sealed partial class ServiceBusQueueAdapterReceiver : IQueueAdapterReceiv
             await args.CompleteMessageAsync(args.Message);
 
             // Increment the processed counter
-            MessagesProcessedCounter.Add(1, 
-                new KeyValuePair<string, object?>("messaging.destination.name", _queueName));
+            ServiceBusInstrumentation.QueueMessagesProcessedCounter.Add(1, 
+                new KeyValuePair<string, object?>(ServiceBusInstrumentation.Tags.MessagingDestinationName, _queueName));
 
             LogMessageProcessed(args.Message.MessageId, _queueName, args.Message.DeliveryCount);
         }
@@ -239,9 +251,10 @@ public sealed partial class ServiceBusQueueAdapterReceiver : IQueueAdapterReceiv
 
     private Task ProcessErrorAsync(ProcessErrorEventArgs args)
     {
-        using var activity = ServiceBusOptions.ActivitySource.StartActivity("error.process");
-        activity?.SetTag("messaging.system", "azureservicebus");
-        activity?.SetTag("messaging.destination.name", _queueName);
+        using var activity = ServiceBusInstrumentation.ActivitySource.StartActivity("error.process");
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingSystem, ServiceBusInstrumentation.TagValues.MessagingSystemValue);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.MessagingDestinationName, _queueName);
+        activity?.SetTag(ServiceBusInstrumentation.Tags.ServiceBusEntityType, ServiceBusInstrumentation.TagValues.EntityTypeQueue);
         activity?.SetStatus(ActivityStatusCode.Error, args.Exception.Message);
 
         LogProcessorError(args.Exception, _queueName, args.ErrorSource.ToString());
@@ -257,6 +270,9 @@ public sealed partial class ServiceBusQueueAdapterReceiver : IQueueAdapterReceiv
         }
 
         _disposed = true;
+
+        // Unregister from buffer size monitoring
+        ServiceBusInstrumentation.UnregisterReceiver($"queue-{_queueName}");
 
         try
         {
