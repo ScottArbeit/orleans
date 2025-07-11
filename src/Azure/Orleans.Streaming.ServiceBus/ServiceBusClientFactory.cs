@@ -2,7 +2,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
-using System.Diagnostics.Metrics;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
@@ -111,7 +110,7 @@ public sealed class ServiceBusClientFactory : IAsyncDisposable
         _clients[optionsName] = client;
 
         // Increment the counter
-        ClientCreatedCounter.Add(1, new KeyValuePair<string, object?>("servicebus.options_name", optionsName));
+        ServiceBusInstrumentation.ClientCreatedCounter.Add(1, new KeyValuePair<string, object?>("servicebus.options_name", optionsName));
 
         activity?.SetTag("servicebus.client.created", true);
 
@@ -152,15 +151,4 @@ public sealed class ServiceBusClientFactory : IAsyncDisposable
             _semaphore.Dispose();
         }
     }
-}
-
-/// <summary>
-/// Contains ServiceBus instrumentation infrastructure.
-/// </summary>
-internal static class ServiceBusInstrumentation
-{
-    /// <summary>
-    /// Gets the Meter for ServiceBus metrics.
-    /// </summary>
-    public static Meter Meter { get; } = new("Orleans.ServiceBus");
 }

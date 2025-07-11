@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Linq;
@@ -40,6 +41,11 @@ public static class ServiceBusInstrumentation
     /// Registry of active receivers for buffer size monitoring.
     /// </summary>
     private static readonly ConcurrentDictionary<string, IBufferSizeProvider> _activeReceivers = new();
+
+    /// <summary>
+    /// Registry of active prefetch configurations for monitoring.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, int> _activePrefetchConfigurations = new();
 
     // Counters
     /// <summary>
@@ -89,6 +95,16 @@ public static class ServiceBusInstrumentation
             new KeyValuePair<string, object?>("receiver.name", kvp.Key))));
 
     /// <summary>
+    /// Gauge for the prefetch buffer size configuration.
+    /// </summary>
+    public static readonly ObservableGauge<int> PrefetchBufferGauge = Meter.CreateObservableGauge<int>(
+        "servicebus.prefetch_buffer",
+        description: "Current prefetch buffer configuration",
+        observeValues: () => _activePrefetchConfigurations.Select(kvp => new Measurement<int>(
+            kvp.Value,
+            new KeyValuePair<string, object?>("receiver.name", kvp.Key))));
+
+    /// <summary>
     /// Interface for objects that can provide buffer size information.
     /// </summary>
     public interface IBufferSizeProvider
@@ -117,6 +133,25 @@ public static class ServiceBusInstrumentation
     public static void UnregisterReceiver(string receiverName)
     {
         _activeReceivers.TryRemove(receiverName, out _);
+    }
+
+    /// <summary>
+    /// Registers a prefetch configuration for monitoring.
+    /// </summary>
+    /// <param name="receiverName">The unique name of the receiver.</param>
+    /// <param name="prefetchCount">The prefetch count configuration.</param>
+    public static void RegisterPrefetchConfiguration(string receiverName, int prefetchCount)
+    {
+        _activePrefetchConfigurations[receiverName] = prefetchCount;
+    }
+
+    /// <summary>
+    /// Unregisters a prefetch configuration from monitoring.
+    /// </summary>
+    /// <param name="receiverName">The unique name of the receiver.</param>
+    public static void UnregisterPrefetchConfiguration(string receiverName)
+    {
+        _activePrefetchConfigurations.TryRemove(receiverName, out _);
     }
 
     /// <summary>

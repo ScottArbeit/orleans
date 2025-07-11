@@ -125,7 +125,7 @@ public class TelemetryTests
     public void ServiceBusInstrumentation_ShouldHaveCorrectMetrics()
     {
         // Arrange
-        var exportedMeasurements = new List<KeyValuePair<string, object?>>();
+        var exportedMeasurements = new List<KeyValuePair<string, object>>();
         
         using var meterProvider = new MeterListener();
         meterProvider.InstrumentPublished = (instrument, listener) =>
@@ -137,25 +137,25 @@ public class TelemetryTests
         };
         meterProvider.SetMeasurementEventCallback<int>((instrument, measurement, tags, state) =>
         {
-            exportedMeasurements.Add(new KeyValuePair<string, object?>(instrument.Name, measurement));
+            exportedMeasurements.Add(new KeyValuePair<string, object>(instrument.Name, measurement));
         });
         meterProvider.Start();
 
         // Act - Simulate incrementing counters
         ServiceBusInstrumentation.QueueMessagesProcessedCounter.Add(1, 
-            new KeyValuePair<string, object?>(ServiceBusInstrumentation.Tags.MessagingDestinationName, "test-queue"));
+            new KeyValuePair<string, object>(ServiceBusInstrumentation.Tags.MessagingDestinationName, "test-queue"));
         
         ServiceBusInstrumentation.TopicMessagesProcessedCounter.Add(2,
-            new KeyValuePair<string, object?>(ServiceBusInstrumentation.Tags.MessagingDestinationName, "test-topic"));
+            new KeyValuePair<string, object>(ServiceBusInstrumentation.Tags.MessagingDestinationName, "test-topic"));
         
         ServiceBusInstrumentation.MessagesDeadLetteredCounter.Add(1,
-            new KeyValuePair<string, object?>(ServiceBusInstrumentation.Tags.MessagingDestinationName, "test-queue"));
+            new KeyValuePair<string, object>(ServiceBusInstrumentation.Tags.MessagingDestinationName, "test-queue"));
 
         ServiceBusInstrumentation.ClientCreatedCounter.Add(1,
-            new KeyValuePair<string, object?>(ServiceBusInstrumentation.Tags.ServiceBusOptionsName, "test-options"));
+            new KeyValuePair<string, object>(ServiceBusInstrumentation.Tags.ServiceBusOptionsName, "test-options"));
 
         ServiceBusInstrumentation.FactoryInitializedCounter.Add(1,
-            new KeyValuePair<string, object?>(ServiceBusInstrumentation.Tags.ServiceBusOptionsName, "test-provider"));
+            new KeyValuePair<string, object>(ServiceBusInstrumentation.Tags.ServiceBusOptionsName, "test-provider"));
 
         // Assert
         var queueMessagesProcessed = exportedMeasurements.Where(m => m.Key == "servicebus.queue.messages_processed").ToList();
