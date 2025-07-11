@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>Microsoft.Orleans.Streaming.ServiceBus</PackageId>
+    <Title>Microsoft Orleans Azure Service Bus Streaming Provider</Title>
+    <Description>Microsoft Orleans streaming provider backed by Azure Service Bus</Description>
+    <PackageTags>$(PackageTags) Azure ServiceBus</PackageTags>
+    <DefineConstants>$(DefineConstants);ORLEANS_SERVICEBUS</DefineConstants>
+    <TargetFrameworks>$(DefaultTargetFrameworks)</TargetFrameworks>
+    <AssemblyName>Orleans.Streaming.ServiceBus</AssemblyName>
+    <RootNamespace>Orleans.Streaming.ServiceBus</RootNamespace>
+    <OrleansBuildTimeCodeGen>true</OrleansBuildTimeCodeGen>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Core" />
+    <PackageReference Include="Azure.Messaging.ServiceBus" />
+    <ProjectReference Include="$(SourceRoot)src\Orleans.Streaming\Orleans.Streaming.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>
