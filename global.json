@@ -1,6 +1,1 @@
-{
-  "sdk": {
-    "rollForward": "major",
-    "version": "8.0.411"
-  }
-}
+{"sdk":{"rollForward":"major","version":"8.0.117"}}
