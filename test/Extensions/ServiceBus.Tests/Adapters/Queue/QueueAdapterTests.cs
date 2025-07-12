@@ -427,7 +427,7 @@ public class ServiceBusQueueAdapterEndToEndTests
         {
             // Create a test message with invalid JSON that will cause processing errors
             var testMessage = ServiceBusModelFactory.ServiceBusReceivedMessage(
-                body: new BinaryData("{ invalid json that will fail parsing }"),
+                body: new BinaryData("{ invalid json"),
                 messageId: $"bad-msg-{testCase.DeliveryCount}",
                 correlationId: "bad-corr",
                 subject: "test-stream",
