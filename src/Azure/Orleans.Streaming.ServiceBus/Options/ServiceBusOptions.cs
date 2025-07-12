@@ -155,6 +155,28 @@ public class ServiceBusOptions
     /// </summary>
     /// <param name="connectionString">The Service Bus connection string.</param>
     /// <param name="options">Optional Service Bus client options.</param>
+    /// <example>
+    /// <code>
+    /// // Basic configuration
+    /// serviceBusOptions.ConfigureServiceBusClient("Endpoint=sb://your-namespace.servicebus.windows.net/;...");
+    /// 
+    /// // With custom client options using C# 13 primary constructor
+    /// public class ServiceBusClientConfigurator(TimeSpan requestTimeout)
+    /// {
+    ///     public ServiceBusClientOptions CreateClientOptions() => new()
+    ///     {
+    ///         TransportType = ServiceBusTransportType.AmqpTcp,
+    ///         RetryOptions = new ServiceBusRetryOptions
+    ///         {
+    ///             TryTimeout = requestTimeout
+    ///         }
+    ///     };
+    /// }
+    /// 
+    /// var configurator = new ServiceBusClientConfigurator(TimeSpan.FromMinutes(2));
+    /// serviceBusOptions.ConfigureServiceBusClient(connectionString, configurator.CreateClientOptions());
+    /// </code>
+    /// </example>
     public void ConfigureServiceBusClient(string connectionString, ServiceBusClientOptions? options = null)
     {
         if (string.IsNullOrWhiteSpace(connectionString)) 
@@ -170,6 +192,34 @@ public class ServiceBusOptions
     /// <param name="fullyQualifiedNamespace">The fully qualified Service Bus namespace.</param>
     /// <param name="credential">The token credential for authentication.</param>
     /// <param name="options">Optional Service Bus client options.</param>
+    /// <example>
+    /// <code>
+    /// // Using DefaultAzureCredential
+    /// serviceBusOptions.ConfigureServiceBusClient(
+    ///     "your-namespace.servicebus.windows.net", 
+    ///     new DefaultAzureCredential());
+    /// 
+    /// // Using managed identity with C# 13 primary constructor
+    /// public class ManagedIdentityServiceBusConfig(string clientId, string serviceBusNamespace)
+    /// {
+    ///     public void Configure(ServiceBusOptions options)
+    ///     {
+    ///         var credential = new ManagedIdentityCredential(clientId);
+    ///         options.ConfigureServiceBusClient(serviceBusNamespace, credential);
+    ///     }
+    /// }
+    /// 
+    /// // Using certificate-based authentication
+    /// public class CertificateServiceBusConfig(string tenantId, string clientId, X509Certificate2 certificate)
+    /// {
+    ///     public void Configure(ServiceBusOptions options)
+    ///     {
+    ///         var credential = new ClientCertificateCredential(tenantId, clientId, certificate);
+    ///         options.ConfigureServiceBusClient("your-namespace.servicebus.windows.net", credential);
+    ///     }
+    /// }
+    /// </code>
+    /// </example>
     public void ConfigureServiceBusClient(string fullyQualifiedNamespace, TokenCredential credential, ServiceBusClientOptions? options = null)
     {
         if (string.IsNullOrWhiteSpace(fullyQualifiedNamespace)) 
@@ -186,6 +236,37 @@ public class ServiceBusOptions
     /// Configures the ServiceBusClient using a custom factory function.
     /// </summary>
     /// <param name="createClientCallback">The callback to create the ServiceBusClient.</param>
+    /// <example>
+    /// <code>
+    /// // Custom client factory with retry logic
+    /// serviceBusOptions.ConfigureServiceBusClient(async () =>
+    /// {
+    ///     var clientOptions = new ServiceBusClientOptions
+    ///     {
+    ///         RetryOptions = new ServiceBusRetryOptions
+    ///         {
+    ///             MaxRetries = 5,
+    ///             Delay = TimeSpan.FromSeconds(2)
+    ///         }
+    ///     };
+    ///     return new ServiceBusClient(connectionString, clientOptions);
+    /// });
+    /// 
+    /// // Using dependency injection with C# 13 primary constructor
+    /// public class ServiceBusClientFactory(IConfiguration config, ILogger&lt;ServiceBusClientFactory&gt; logger)
+    /// {
+    ///     public async Task&lt;ServiceBusClient&gt; CreateClientAsync()
+    ///     {
+    ///         logger.LogInformation("Creating Service Bus client");
+    ///         var connectionString = config.GetConnectionString("ServiceBus");
+    ///         return new ServiceBusClient(connectionString!);
+    ///     }
+    /// }
+    /// 
+    /// var factory = serviceProvider.GetRequiredService&lt;ServiceBusClientFactory&gt;();
+    /// serviceBusOptions.ConfigureServiceBusClient(factory.CreateClientAsync);
+    /// </code>
+    /// </example>
     public void ConfigureServiceBusClient(Func<Task<ServiceBusClient>> createClientCallback)
     {
         CreateClient = createClientCallback ?? throw new ArgumentNullException(nameof(createClientCallback));
