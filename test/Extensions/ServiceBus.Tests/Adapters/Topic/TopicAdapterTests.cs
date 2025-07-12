@@ -696,10 +696,7 @@ public class TopicAdapterMultiSubscriptionTests
         Assert.Same(receiver1, receiver1Duplicate);
 
         // Verify isolated disposal (cast to actual type to access DisposeAsync)
-        if (receiver1 is ServiceBusTopicAdapterReceiver disposableReceiver1)
-        {
-            await disposableReceiver1.DisposeAsync();
-        }
+        await receiver1.DisposeAsync();
         
         // Receiver2 should still be functional (not affected by receiver1 disposal)
         var receiver2Duplicate = adapter.CreateReceiver(allQueues[1]);
