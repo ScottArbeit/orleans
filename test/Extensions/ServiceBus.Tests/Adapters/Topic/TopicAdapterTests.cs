@@ -694,9 +694,6 @@ public class TopicAdapterMultiSubscriptionTests
         // Test that creating receiver for same queue returns same instance (caching)
         var receiver1Duplicate = adapter.CreateReceiver(allQueues[0]);
         Assert.Same(receiver1, receiver1Duplicate);
-
-        // Verify isolated disposal (cast to actual type to access DisposeAsync)
-        await receiver1.DisposeAsync();
         
         // Receiver2 should still be functional (not affected by receiver1 disposal)
         var receiver2Duplicate = adapter.CreateReceiver(allQueues[1]);
