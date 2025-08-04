@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Orleans.Runtime;
 
@@ -101,18 +102,32 @@ public class AzureServiceBusOptionsValidator : IConfigurationValidator
     {
         try
         {
-            // Basic validation - ensure connection string has required components
-            if (!connectionString.Contains("Endpoint=", StringComparison.OrdinalIgnoreCase))
+            // Split the connection string into parts
+            var parts = connectionString.Split(';', StringSplitOptions.RemoveEmptyEntries);
+            
+            // Look for an endpoint part that starts with "Endpoint="
+            var endpointPart = parts.FirstOrDefault(p => p.StartsWith("Endpoint=", StringComparison.OrdinalIgnoreCase));
+            
+            if (endpointPart == null)
             {
                 throw new OrleansConfigurationException(
                     $"{nameof(AzureServiceBusOptions)} on stream provider \"{_name}\" is invalid. " +
                     "Connection string must contain 'Endpoint='");
             }
 
+            // Extract the endpoint value and ensure it's not empty
+            var endpointValue = endpointPart.Substring("Endpoint=".Length);
+            if (string.IsNullOrWhiteSpace(endpointValue))
+            {
+                throw new OrleansConfigurationException(
+                    $"{nameof(AzureServiceBusOptions)} on stream provider \"{_name}\" is invalid. " +
+                    "Connection string Endpoint value cannot be empty");
+            }
+
             // Check for either SharedAccessKey or managed identity
-            bool hasSharedAccessKey = connectionString.Contains("SharedAccessKeyName=", StringComparison.OrdinalIgnoreCase) &&
-                                     connectionString.Contains("SharedAccessKey=", StringComparison.OrdinalIgnoreCase);
-            bool hasSharedAccessSignature = connectionString.Contains("SharedAccessSignature=", StringComparison.OrdinalIgnoreCase);
+            bool hasSharedAccessKey = parts.Any(p => p.StartsWith("SharedAccessKeyName=", StringComparison.OrdinalIgnoreCase)) &&
+                                     parts.Any(p => p.StartsWith("SharedAccessKey=", StringComparison.OrdinalIgnoreCase));
+            bool hasSharedAccessSignature = parts.Any(p => p.StartsWith("SharedAccessSignature=", StringComparison.OrdinalIgnoreCase));
 
             if (!hasSharedAccessKey && !hasSharedAccessSignature)
             {
