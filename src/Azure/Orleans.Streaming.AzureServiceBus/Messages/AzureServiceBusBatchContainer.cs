@@ -5,6 +5,8 @@ using Orleans.Runtime;
 using Orleans.Serialization;
 using Orleans.Streams;
 
+#nullable enable
+
 namespace Orleans.Streaming.AzureServiceBus.Messages
 {
     /// <summary>
@@ -55,16 +57,6 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
         /// </summary>
         public int EventCount => BatchContainers.Sum(container => 
             container.GetEvents<object>().Count());
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="AzureServiceBusBatchContainer"/> class.
-        /// </summary>
-        public AzureServiceBusBatchContainer()
-        {
-            BatchContainers = new List<IBatchContainer>();
-            RequestContext = new Dictionary<string, object>();
-            BatchId = string.Empty;
-        }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AzureServiceBusBatchContainer"/> class.
@@ -167,7 +159,8 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
             // Use the earliest sequence token as the batch token
             var earliestToken = messageList
                 .Select(msg => msg.SequenceToken)
-                .Min();
+                .Where(token => token != null)
+                .Min() ?? messageList[0].SequenceToken;
 
             // Update messages with batch information
             var batchMessages = messageList

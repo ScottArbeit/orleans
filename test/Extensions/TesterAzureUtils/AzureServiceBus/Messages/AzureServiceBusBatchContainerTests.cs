@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Extensions.DependencyInjection;
+using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
 using Orleans.Serialization;
 using Orleans.Streaming.AzureServiceBus.Messages;
@@ -186,7 +188,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             };
             var batch = new AzureServiceBusBatchContainer(
                 streamId,
-                new AzureServiceBusSequenceToken(100),
+                new EventSequenceTokenV2(100),
                 messages,
                 "test-batch",
                 requestContext);
@@ -246,7 +248,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
 
         private AzureServiceBusMessage CreateTestMessage(StreamId streamId, long sequenceNumber, string eventData)
         {
-            var sequenceToken = new AzureServiceBusSequenceToken(sequenceNumber, 0, 1);
+            var sequenceToken = new EventSequenceTokenV2(sequenceNumber, 0);
             var payload = _serializer.SerializeToArray(eventData);
             var metadata = new ServiceBusMessageMetadata(
                 Guid.NewGuid().ToString(),

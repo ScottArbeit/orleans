@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Azure.Messaging.ServiceBus;
+using Microsoft.Extensions.DependencyInjection;
+using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
 using Orleans.Serialization;
 using Orleans.Streaming.AzureServiceBus.Messages;
@@ -164,7 +166,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
         {
             // Arrange
             var streamId = StreamId.Create("test-namespace", "test-key");
-            var sequenceToken = new AzureServiceBusSequenceToken(123);
+            var sequenceToken = new EventSequenceTokenV2(123);
             var payload = "test"u8.ToArray();
             var metadata = new ServiceBusMessageMetadata(); // Empty message ID
 
@@ -304,9 +306,8 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             Assert.Equal(streamId, message.StreamId);
             Assert.NotNull(message.SequenceToken);
             
-            var token = Assert.IsType<AzureServiceBusSequenceToken>(message.SequenceToken);
-            Assert.Equal(12345, token.ServiceBusSequenceNumber);
-            Assert.Equal(2, token.DeliveryCount);
+            var token = Assert.IsType<EventSequenceTokenV2>(message.SequenceToken);
+            Assert.Equal(12345, token.SequenceNumber);
             
             Assert.Equal("msg-123", message.Metadata.MessageId);
             Assert.Equal("corr-456", message.Metadata.CorrelationId);

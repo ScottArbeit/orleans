@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Azure.Messaging.ServiceBus;
+using Microsoft.Extensions.DependencyInjection;
 using Orleans.Runtime;
 using Orleans.Serialization;
 using Orleans.Streaming.AzureServiceBus.Messages;

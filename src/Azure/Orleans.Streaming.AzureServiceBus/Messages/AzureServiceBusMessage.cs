@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
 using Orleans.Serialization;
 using Orleans.Streams;
+
+#nullable enable
 
 namespace Orleans.Streaming.AzureServiceBus.Messages
 {
@@ -59,15 +62,6 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
         /// <summary>
         /// Initializes a new instance of the <see cref="AzureServiceBusMessage"/> class.
         /// </summary>
-        public AzureServiceBusMessage()
-        {
-            RequestContext = new Dictionary<string, object>();
-            Metadata = new ServiceBusMessageMetadata();
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="AzureServiceBusMessage"/> class.
-        /// </summary>
         /// <param name="streamId">The stream identifier.</param>
         /// <param name="sequenceToken">The sequence token.</param>
         /// <param name="payload">The serialized payload.</param>
@@ -103,12 +97,11 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
 
             // Create a sequence token for this specific event
             var eventToken = SequenceToken;
-            if (BatchPosition > 0 && SequenceToken is AzureServiceBusSequenceToken serviceBusToken)
+            if (BatchPosition > 0 && SequenceToken is EventSequenceTokenV2 sequenceTokenV2)
             {
-                eventToken = new AzureServiceBusSequenceToken(
-                    serviceBusToken.ServiceBusSequenceNumber,
-                    BatchPosition,
-                    serviceBusToken.DeliveryCount);
+                eventToken = new EventSequenceTokenV2(
+                    sequenceTokenV2.SequenceNumber,
+                    BatchPosition);
             }
 
             // The payload should be deserializable by the consumer

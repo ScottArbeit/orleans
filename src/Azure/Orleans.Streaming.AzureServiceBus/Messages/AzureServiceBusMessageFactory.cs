@@ -3,9 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Azure.Messaging.ServiceBus;
+using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
 using Orleans.Serialization;
 using Orleans.Streams;
+
+#nullable enable
 
 namespace Orleans.Streaming.AzureServiceBus.Messages
 {
@@ -45,10 +48,9 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
             var payload = _serializer.SerializeToArray(eventData);
 
             // Create sequence token - we'll use timestamp as sequence number for now
-            var sequenceToken = new AzureServiceBusSequenceToken(
+            var sequenceToken = new EventSequenceTokenV2(
                 DateTimeOffset.UtcNow.Ticks, 
-                0, 
-                1);
+                0);
 
             // Create metadata with current timestamp
             var metadata = new ServiceBusMessageMetadata(
@@ -77,10 +79,9 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
                 throw new ArgumentNullException(nameof(serviceBusMessage));
 
             // Create sequence token from Service Bus sequence number
-            var sequenceToken = new AzureServiceBusSequenceToken(
+            var sequenceToken = new EventSequenceTokenV2(
                 serviceBusMessage.SequenceNumber,
-                0,
-                serviceBusMessage.DeliveryCount);
+                0);
 
             // Extract metadata from Service Bus message
             var metadata = new ServiceBusMessageMetadata(
@@ -132,8 +133,8 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
             };
 
             // Add stream information to application properties
-            serviceBusMessage.ApplicationProperties["StreamId"] = streamId.ToString();
-            serviceBusMessage.ApplicationProperties["StreamNamespace"] = streamId.Namespace;
+            serviceBusMessage.ApplicationProperties["StreamNamespace"] = Encoding.UTF8.GetString(streamId.Namespace.Span);
+            serviceBusMessage.ApplicationProperties["StreamKey"] = Encoding.UTF8.GetString(streamId.Key.Span);
 
             // Add request context if provided
             if (requestContext != null)
@@ -242,13 +243,12 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
         /// <returns>The extracted stream identifier.</returns>
         public StreamId ExtractStreamId(ServiceBusReceivedMessage serviceBusMessage, StreamId? defaultStreamId = null)
         {
-            if (serviceBusMessage?.ApplicationProperties?.TryGetValue("StreamId", out var streamIdValue) == true
-                && streamIdValue is string streamIdString)
+            if (serviceBusMessage?.ApplicationProperties?.TryGetValue("StreamNamespace", out var namespaceValue) == true
+                && serviceBusMessage.ApplicationProperties.TryGetValue("StreamKey", out var keyValue) == true
+                && namespaceValue is string streamNamespace
+                && keyValue is string streamKey)
             {
-                if (StreamId.TryParse(streamIdString, out var streamId))
-                {
-                    return streamId;
-                }
+                return StreamId.Create(streamNamespace, streamKey);
             }
 
             return defaultStreamId ?? throw new ArgumentException(

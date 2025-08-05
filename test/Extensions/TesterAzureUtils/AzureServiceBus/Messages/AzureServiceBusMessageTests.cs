@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Microsoft.Extensions.DependencyInjection;
+using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
 using Orleans.Serialization;
 using Orleans.Streaming.AzureServiceBus.Messages;
@@ -28,7 +30,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
         {
             // Arrange
             var streamId = StreamId.Create("test-namespace", "test-key");
-            var sequenceToken = new AzureServiceBusSequenceToken(12345, 0, 1);
+            var sequenceToken = new EventSequenceTokenV2(12345, 0);
             var payload = "test-payload"u8.ToArray();
             var requestContext = new Dictionary<string, object> { { "key1", "value1" }, { "key2", 42 } };
             var metadata = new ServiceBusMessageMetadata(
@@ -65,7 +67,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
         {
             // Arrange
             var streamId = StreamId.Create("test-namespace", "test-key");
-            var sequenceToken = new AzureServiceBusSequenceToken(12345, 0, 1);
+            var sequenceToken = new EventSequenceTokenV2(12345, 0);
             var testData = "test-event";
             var payload = _serializer.SerializeToArray(testData);
             var message = new AzureServiceBusMessage(streamId, sequenceToken, payload);
@@ -88,7 +90,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
         {
             // Arrange
             var streamId = StreamId.Create("test-namespace", "test-key");
-            var sequenceToken = new AzureServiceBusSequenceToken(12345, 0, 1);
+            var sequenceToken = new EventSequenceTokenV2(12345, 0);
             var payload = "test-payload"u8.ToArray();
             var requestContext = new Dictionary<string, object>
             {
@@ -114,7 +116,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
         {
             // Arrange
             var streamId = StreamId.Create("test-namespace", "test-key");
-            var sequenceToken = new AzureServiceBusSequenceToken(12345, 0, 1);
+            var sequenceToken = new EventSequenceTokenV2(12345, 0);
             var emptyPayload = ReadOnlyMemory<byte>.Empty;
 
             var message = new AzureServiceBusMessage(streamId, sequenceToken, emptyPayload);
@@ -131,7 +133,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
         {
             // Arrange
             var streamId = StreamId.Create("test-namespace", "test-key");
-            var sequenceToken = new AzureServiceBusSequenceToken(12345, 0, 1);
+            var sequenceToken = new EventSequenceTokenV2(12345, 0);
             var payload = "test-payload"u8.ToArray();
             var originalMessage = new AzureServiceBusMessage(streamId, sequenceToken, payload);
 
@@ -151,8 +153,8 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
         {
             // Arrange
             var streamId = StreamId.Create("test-namespace", "test-key");
-            var originalToken = new AzureServiceBusSequenceToken(12345, 0, 1);
-            var newToken = new AzureServiceBusSequenceToken(67890, 1, 2);
+            var originalToken = new EventSequenceTokenV2(12345, 0);
+            var newToken = new EventSequenceTokenV2(67890, 1);
             var payload = "test-payload"u8.ToArray();
             var originalMessage = new AzureServiceBusMessage(streamId, originalToken, payload);
 
@@ -198,13 +200,13 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
         }
 
         [Fact]
-        public void AzureServiceBusSequenceTokenComparison()
+        public void EventSequenceTokenComparison()
         {
             // Arrange
-            var token1 = new AzureServiceBusSequenceToken(100, 0, 1);
-            var token2 = new AzureServiceBusSequenceToken(200, 0, 1);
-            var token3 = new AzureServiceBusSequenceToken(100, 1, 1);
-            var token4 = new AzureServiceBusSequenceToken(100, 0, 1);
+            var token1 = new EventSequenceTokenV2(100, 0);
+            var token2 = new EventSequenceTokenV2(200, 0);
+            var token3 = new EventSequenceTokenV2(100, 1);
+            var token4 = new EventSequenceTokenV2(100, 0);
 
             // Act & Assert
             Assert.True(token1.CompareTo(token2) < 0);
@@ -219,17 +221,15 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
         public void SequenceTokenSerialization()
         {
             // Arrange
-            var token = new AzureServiceBusSequenceToken(12345, 2, 3);
+            var token = new EventSequenceTokenV2(12345, 2);
 
             // Act
             var serialized = _serializer.SerializeToArray(token);
-            var deserialized = _serializer.Deserialize<AzureServiceBusSequenceToken>(serialized);
+            var deserialized = _serializer.Deserialize<EventSequenceTokenV2>(serialized);
 
             // Assert
-            Assert.Equal(token.ServiceBusSequenceNumber, deserialized.ServiceBusSequenceNumber);
-            Assert.Equal(token.EventIndex, deserialized.EventIndex);
-            Assert.Equal(token.DeliveryCount, deserialized.DeliveryCount);
             Assert.Equal(token.SequenceNumber, deserialized.SequenceNumber);
+            Assert.Equal(token.EventIndex, deserialized.EventIndex);
         }
     }
 }

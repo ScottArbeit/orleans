@@ -14,17 +14,12 @@ Preserves Azure Service Bus message properties including:
 - EnqueuedTime, ReplyTo, Subject
 - ApplicationProperties, PartitionKey, TimeToLive
 
-### AzureServiceBusSequenceToken
-Extends Orleans `EventSequenceTokenV2` to track:
-- Service Bus sequence number
-- Event index for batch operations
-- Delivery count for retry scenarios
-
 ### AzureServiceBusMessage
 Main IBatchContainer implementation featuring:
 - Orleans serialization with `[GenerateSerializer]`
 - ReadOnlyMemory<byte> for efficient payload handling
 - Request context propagation
+- Standard EventSequenceTokenV2 for sequence tracking
 - Immutable design for thread safety
 
 ### AzureServiceBusBatchContainer
