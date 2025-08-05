@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using Orleans.Providers.Streams.Common;
 using Orleans.Serialization;
+using Orleans.Streams;
 
 namespace Orleans.Streaming.AzureServiceBus.Messages
 {

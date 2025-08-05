@@ -97,7 +97,7 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
         public IEnumerable<Tuple<T, StreamSequenceToken>> GetEvents<T>()
         {
             // For single messages, we yield one event
-            // The payload will be deserialized by the consumer
+            // The message should already contain a properly structured payload
             if (Payload.IsEmpty)
                 yield break;
 
@@ -111,7 +111,8 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
                     serviceBusToken.DeliveryCount);
             }
 
-            // We return the payload bytes as object, letting Orleans handle deserialization
+            // The payload should be deserializable by the consumer
+            // We'll cast to object first, then let Orleans handle the final casting
             yield return new Tuple<T, StreamSequenceToken>((T)(object)Payload.ToArray(), eventToken);
         }
 
