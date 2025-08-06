@@ -103,32 +103,42 @@ namespace Orleans.Streaming.AzureServiceBus.Providers
 
             try
             {
-                // Get the appropriate sender based on entity mode
-                var sender = await _connectionManager.GetSenderAsync(_options.EntityName);
+                // Use retry logic for sending messages to handle transient failures
+                await RetryHelper.ExecuteWithRetryAsync(
+                    async () =>
+                    {
+                        // Get the appropriate sender based on entity mode
+                        var sender = await _connectionManager.GetSenderAsync(_options.EntityName);
 
-                // Create Service Bus messages for each event
-                var serviceBusMessages = new List<ServiceBusMessage>();
-                foreach (var evt in eventList)
-                {
-                    var serviceBusMessage = _messageFactory.CreateServiceBusMessage(
-                        streamId,
-                        evt!,
-                        requestContext);
+                        // Create Service Bus messages for each event
+                        var serviceBusMessages = new List<ServiceBusMessage>();
+                        foreach (var evt in eventList)
+                        {
+                            var serviceBusMessage = _messageFactory.CreateServiceBusMessage(
+                                streamId,
+                                evt!,
+                                requestContext);
 
-                    serviceBusMessages.Add(serviceBusMessage);
-                }
+                            serviceBusMessages.Add(serviceBusMessage);
+                        }
 
-                // Send messages based on batch size
-                if (serviceBusMessages.Count == 1)
-                {
-                    await sender.SendMessageAsync(serviceBusMessages[0]);
-                    _logger.LogDebug("Sent single message for stream {StreamId}", streamId);
-                }
-                else
-                {
-                    await sender.SendMessagesAsync(serviceBusMessages);
-                    _logger.LogDebug("Sent batch of {MessageCount} messages for stream {StreamId}", serviceBusMessages.Count, streamId);
-                }
+                        // Send messages based on batch size
+                        if (serviceBusMessages.Count == 1)
+                        {
+                            await sender.SendMessageAsync(serviceBusMessages[0]);
+                            _logger.LogDebug("Sent single message for stream {StreamId}", streamId);
+                        }
+                        else
+                        {
+                            await sender.SendMessagesAsync(serviceBusMessages);
+                            _logger.LogDebug("Sent batch of {MessageCount} messages for stream {StreamId}", serviceBusMessages.Count, streamId);
+                        }
+                    },
+                    maxRetries: 3,
+                    baseDelay: TimeSpan.FromSeconds(1),
+                    maxDelay: TimeSpan.FromSeconds(30),
+                    logger: _logger,
+                    operationName: $"SendMessages for stream {streamId}");
             }
             catch (ServiceBusException ex) when (IsTransientError(ex))
             {

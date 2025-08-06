@@ -131,20 +131,26 @@ namespace Orleans.Streaming.AzureServiceBus.Providers
             await _connectionSemaphore.WaitAsync();
             try
             {
-                _logger.LogWarning("Attempting to recover Service Bus connection");
+                await RetryHelper.ExecuteWithRetryAsync(
+                    () =>
+                    {
+                        _logger.LogWarning("Attempting to recover Service Bus connection");
 
-                // Dispose existing resources
-                DisposeAllResources();
+                        // Dispose existing resources
+                        DisposeAllResources();
 
-                // Reinitialize the client
-                InitializeServiceBusClient();
+                        // Reinitialize the client
+                        InitializeServiceBusClient();
 
-                _logger.LogInformation("Service Bus connection recovery completed successfully");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to recover Service Bus connection");
-                throw;
+                        _logger.LogInformation("Service Bus connection recovery completed successfully");
+                        
+                        return Task.CompletedTask;
+                    },
+                    maxRetries: 3,
+                    baseDelay: TimeSpan.FromSeconds(2),
+                    maxDelay: TimeSpan.FromSeconds(60),
+                    logger: _logger,
+                    operationName: "Connection Recovery");
             }
             finally
             {
