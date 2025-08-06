@@ -184,7 +184,9 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             // Add properties to approach but not exceed the 256KB limit
             for (int i = 0; i < 1000; i++)
             {
-                largeEvent.Properties[$"property_{i}"] = new string('x', 200); // 200 chars each
+            for (int i = 0; i < PropertyCountForLargeEvent; i++)
+            {
+                largeEvent.Properties[$"property_{i}"] = new string('x', PropertyValueLengthForLargeEvent); // 200 chars each
             }
 
             var message = _factory.CreateFromStreamEvent(streamId, largeEvent);
