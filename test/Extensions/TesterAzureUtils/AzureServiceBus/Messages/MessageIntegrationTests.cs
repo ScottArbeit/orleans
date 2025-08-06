@@ -182,8 +182,8 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             };
 
             // Add properties to approach but not exceed the 256KB limit
-            for (int i = 0; i < 1000; i++)
-            {
+            const int PropertyCountForLargeEvent = 1000;
+            const int PropertyValueLengthForLargeEvent = 200;
             for (int i = 0; i < PropertyCountForLargeEvent; i++)
             {
                 largeEvent.Properties[$"property_{i}"] = new string('x', PropertyValueLengthForLargeEvent); // 200 chars each
