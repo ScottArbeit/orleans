@@ -44,9 +44,6 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
             if (eventData == null)
                 throw new ArgumentNullException(nameof(eventData));
 
-            // Serialize the event data
-            var payload = _serializer.SerializeToArray(eventData);
-
             // Create sequence token - we'll use timestamp as sequence number for now
             var sequenceToken = new EventSequenceTokenV2(
                 DateTimeOffset.UtcNow.Ticks, 
@@ -60,7 +57,7 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
             return new AzureServiceBusMessage(
                 streamId,
                 sequenceToken,
-                payload,
+                new[] { eventData },
                 requestContext,
                 metadata);
         }
@@ -95,13 +92,26 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
                 partitionKey: serviceBusMessage.PartitionKey,
                 timeToLive: serviceBusMessage.TimeToLive);
 
-            // Use the message body as payload
+            // Deserialize the message body to get the event objects
             var payload = serviceBusMessage.Body.ToMemory();
+            var events = new List<object>();
+            
+            try
+            {
+                // Try to deserialize as a single object first
+                var deserializedEvent = _serializer.Deserialize<object>(payload.ToArray());
+                events.Add(deserializedEvent);
+            }
+            catch
+            {
+                // If that fails, create a raw byte array event
+                events.Add(payload.ToArray());
+            }
 
             return new AzureServiceBusMessage(
                 streamId,
                 sequenceToken,
-                payload,
+                events,
                 metadata: metadata);
         }
 
@@ -192,10 +202,18 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
-            if (message.Payload.Length > maxMessageSize)
+            // Estimate message size by serializing events
+            var totalSize = 0L;
+            foreach (var evt in message.Events)
+            {
+                var serializedEvent = _serializer.SerializeToArray(evt);
+                totalSize += serializedEvent.Length;
+            }
+
+            if (totalSize > maxMessageSize)
             {
                 throw new ArgumentException(
-                    $"Message payload size ({message.Payload.Length} bytes) exceeds maximum allowed size ({maxMessageSize} bytes).",
+                    $"Message events size ({totalSize} bytes) exceeds maximum allowed size ({maxMessageSize} bytes).",
                     nameof(message));
             }
 

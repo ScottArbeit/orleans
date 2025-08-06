@@ -30,10 +30,10 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
         public StreamSequenceToken SequenceToken { get; init; }
 
         /// <summary>
-        /// Gets the serialized payload data.
+        /// Gets the deserialized event objects.
         /// </summary>
         [Id(2)]
-        public ReadOnlyMemory<byte> Payload { get; init; }
+        public List<object> Events { get; init; }
 
         /// <summary>
         /// Gets the request context data for Orleans context propagation.
@@ -64,7 +64,7 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
         /// </summary>
         /// <param name="streamId">The stream identifier.</param>
         /// <param name="sequenceToken">The sequence token.</param>
-        /// <param name="payload">The serialized payload.</param>
+        /// <param name="events">The event objects.</param>
         /// <param name="requestContext">The request context.</param>
         /// <param name="metadata">The Service Bus metadata.</param>
         /// <param name="batchId">The batch identifier.</param>
@@ -72,7 +72,7 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
         public AzureServiceBusMessage(
             StreamId streamId,
             StreamSequenceToken sequenceToken,
-            ReadOnlyMemory<byte> payload,
+            IEnumerable<object>? events = null,
             Dictionary<string, object>? requestContext = null,
             ServiceBusMessageMetadata? metadata = null,
             string? batchId = null,
@@ -80,7 +80,7 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
         {
             StreamId = streamId;
             SequenceToken = sequenceToken ?? throw new ArgumentNullException(nameof(sequenceToken));
-            Payload = payload;
+            Events = events?.ToList() ?? new List<object>();
             RequestContext = requestContext ?? new Dictionary<string, object>();
             Metadata = metadata ?? new ServiceBusMessageMetadata();
             BatchId = batchId;
@@ -90,25 +90,25 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
         /// <inheritdoc/>
         public IEnumerable<Tuple<T, StreamSequenceToken>> GetEvents<T>()
         {
-            // For single messages, we yield one event
-            // The message should already contain a properly structured payload
-            if (Payload.IsEmpty)
-                yield break;
-
-            // Create a sequence token for this specific event
-            var eventToken = SequenceToken;
-            if (BatchPosition > 0 && SequenceToken is EventSequenceTokenV2 sequenceTokenV2)
+            // Return events cast to the requested type with proper sequence tokens
+            return Events.OfType<T>().Select((evt, index) =>
             {
-                eventToken = new EventSequenceTokenV2(
-                    sequenceTokenV2.SequenceNumber,
-                    BatchPosition);
-            }
+                var eventToken = SequenceToken;
+                if (BatchPosition > 0 && SequenceToken is EventSequenceTokenV2 sequenceTokenV2)
+                {
+                    eventToken = new EventSequenceTokenV2(
+                        sequenceTokenV2.SequenceNumber,
+                        BatchPosition + index);
+                }
+                else if (index > 0 && SequenceToken is EventSequenceTokenV2 tokenV2)
+                {
+                    eventToken = new EventSequenceTokenV2(
+                        tokenV2.SequenceNumber,
+                        index);
+                }
 
-            // The payload should be deserializable by the consumer
-            // We'll cast to object first, then let Orleans handle the final casting
-            // The payload should be deserialized using the provided serializer
-            var deserialized = serializer.Deserialize<T>(Payload.ToArray());
-            yield return new Tuple<T, StreamSequenceToken>(deserialized, eventToken);
+                return Tuple.Create<T, StreamSequenceToken>(evt, eventToken);
+            });
         }
 
         /// <inheritdoc/>
@@ -132,7 +132,7 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
             return new AzureServiceBusMessage(
                 StreamId,
                 SequenceToken,
-                Payload,
+                Events,
                 RequestContext,
                 Metadata,
                 batchId,
@@ -149,7 +149,7 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
             return new AzureServiceBusMessage(
                 StreamId,
                 sequenceToken,
-                Payload,
+                Events,
                 RequestContext,
                 Metadata,
                 BatchId,
