@@ -106,7 +106,9 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
 
             // The payload should be deserializable by the consumer
             // We'll cast to object first, then let Orleans handle the final casting
-            yield return new Tuple<T, StreamSequenceToken>((T)(object)Payload.ToArray(), eventToken);
+            // The payload should be deserialized using the provided serializer
+            var deserialized = serializer.Deserialize<T>(Payload.ToArray());
+            yield return new Tuple<T, StreamSequenceToken>(deserialized, eventToken);
         }
 
         /// <inheritdoc/>
