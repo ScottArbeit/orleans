@@ -32,7 +32,7 @@ public class ServiceBusStreamFailureHandler : IStreamFailureHandler
     }
 
     /// <inheritdoc/>
-    public bool ShouldFaultSubsriptionOnError => false;
+    public bool ShouldFaultSubscriptionOnError => false;
 
     /// <inheritdoc/>
     public Task OnDeliveryFailure(GuidId subscriptionId, string streamProviderName, StreamId streamIdentity, StreamSequenceToken sequenceToken)
