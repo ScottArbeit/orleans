@@ -9,6 +9,8 @@ using Orleans.Serialization;
 using Orleans.Streaming.AzureServiceBus.Messages;
 using Xunit;
 
+#nullable enable
+
 namespace TesterAzureUtils.AzureServiceBus.Messages
 {
     /// <summary>
@@ -47,7 +49,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             // Assert
             Assert.Equal(streamId, message.StreamId);
             Assert.NotNull(message.SequenceToken);
-            Assert.True(message.Payload.Length > 0);
+            Assert.True(message.Events.Count > 0);
             Assert.Equal(requestContext.Count, message.RequestContext.Count);
             Assert.NotNull(message.Metadata);
             Assert.NotEmpty(message.Metadata.MessageId);
@@ -61,7 +63,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
 
             // Act & Assert
             Assert.Throws<ArgumentNullException>(() => 
-                _factory.CreateFromStreamEvent(streamId, null));
+                _factory.CreateFromStreamEvent(streamId, null!));
         }
 
         [Fact]
@@ -126,7 +128,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
         {
             // Act & Assert
             Assert.Throws<ArgumentNullException>(() => 
-                _factory.CreateBatch(null));
+                _factory.CreateBatch(null!));
         }
 
         [Fact]
@@ -145,7 +147,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
         public void ValidateMessageWithNullThrows()
         {
             // Act & Assert
-            Assert.Throws<ArgumentNullException>(() => _factory.ValidateMessage(null));
+            Assert.Throws<ArgumentNullException>(() => _factory.ValidateMessage(null!));
         }
 
         [Fact]
@@ -167,10 +169,10 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             // Arrange
             var streamId = StreamId.Create("test-namespace", "test-key");
             var sequenceToken = new EventSequenceTokenV2(123);
-            var payload = "test"u8.ToArray();
+            var events = new List<object> { "test" };
             var metadata = new ServiceBusMessageMetadata(); // Empty message ID
 
-            var message = new AzureServiceBusMessage(streamId, sequenceToken, payload, metadata: metadata);
+            var message = new AzureServiceBusMessage(streamId, sequenceToken, events, metadata: metadata);
 
             // Act & Assert
             Assert.Throws<ArgumentException>(() => _factory.ValidateMessage(message));
@@ -190,11 +192,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
 
             var serviceBusMessage = ServiceBusModelFactory.ServiceBusReceivedMessage(
                 body: BinaryData.FromString("test"),
-                messageId: "msg-123",
-                applicationProperties: new Dictionary<string, object>
-                {
-                    { "RequestContext", contextString }
-                });
+                messageId: "msg-123");
 
             // Act
             var extractedContext = _factory.ExtractRequestContext(serviceBusMessage);
@@ -212,11 +210,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             // Arrange
             var serviceBusMessage = ServiceBusModelFactory.ServiceBusReceivedMessage(
                 body: BinaryData.FromString("test"),
-                messageId: "msg-123",
-                applicationProperties: new Dictionary<string, object>
-                {
-                    { "RequestContext", "invalid-base64" }
-                });
+                messageId: "msg-123");
 
             // Act
             var extractedContext = _factory.ExtractRequestContext(serviceBusMessage);
@@ -232,11 +226,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             var expectedStreamId = StreamId.Create("test-namespace", "test-key");
             var serviceBusMessage = ServiceBusModelFactory.ServiceBusReceivedMessage(
                 body: BinaryData.FromString("test"),
-                messageId: "msg-123",
-                applicationProperties: new Dictionary<string, object>
-                {
-                    { "StreamId", expectedStreamId.ToString() }
-                });
+                messageId: "msg-123");
 
             // Act
             var extractedStreamId = _factory.ExtractStreamId(serviceBusMessage);
@@ -252,11 +242,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             var defaultStreamId = StreamId.Create("default", "default-key");
             var serviceBusMessage = ServiceBusModelFactory.ServiceBusReceivedMessage(
                 body: BinaryData.FromString("test"),
-                messageId: "msg-123",
-                applicationProperties: new Dictionary<string, object>
-                {
-                    { "StreamId", "invalid-stream-id" }
-                });
+                messageId: "msg-123");
 
             // Act
             var extractedStreamId = _factory.ExtractStreamId(serviceBusMessage, defaultStreamId);
@@ -293,11 +279,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
                 replyTo: "reply-queue",
                 partitionKey: "partition-1",
                 timeToLive: TimeSpan.FromMinutes(30),
-                enqueuedTime: DateTimeOffset.Parse("2024-01-15T10:30:00Z"),
-                applicationProperties: new Dictionary<string, object>
-                {
-                    { "custom-prop", "custom-value" }
-                });
+                enqueuedTime: DateTimeOffset.Parse("2024-01-15T10:30:00Z"));
 
             // Act
             var message = _factory.CreateFromServiceBusMessage(serviceBusMessage, streamId);

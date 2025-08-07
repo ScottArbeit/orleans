@@ -76,6 +76,7 @@
     <Project Path="src/Azure/Orleans.Persistence.Cosmos/Orleans.Persistence.Cosmos.csproj" />
     <Project Path="src/Azure/Orleans.Reminders.AzureStorage/Orleans.Reminders.AzureStorage.csproj" />
     <Project Path="src/Azure/Orleans.Reminders.Cosmos/Orleans.Reminders.Cosmos.csproj" />
+    <Project Path="src/Azure/Orleans.Streaming.AzureServiceBus/Orleans.Streaming.AzureServiceBus.csproj" />
     <Project Path="src/Azure/Orleans.Streaming.AzureStorage/Orleans.Streaming.AzureStorage.csproj" />
     <Project Path="src/Azure/Orleans.Streaming.EventHubs/Orleans.Streaming.EventHubs.csproj" />
     <Project Path="src/Azure/Orleans.Transactions.AzureStorage/Orleans.Transactions.AzureStorage.csproj" />

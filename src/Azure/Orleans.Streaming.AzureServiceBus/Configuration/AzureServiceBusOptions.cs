@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using Orleans.Streaming.AzureServiceBus.Providers;
 
 namespace Orleans.Configuration;
 
@@ -61,4 +63,37 @@ public class AzureServiceBusOptions
     /// The receive mode for messages. Default is PeekLock.
     /// </summary>
     public string ReceiveMode { get; set; } = "PeekLock";
+
+    /// <summary>
+    /// The strategy for mapping streams to Service Bus entities. Default is Single.
+    /// </summary>
+    public QueueMappingStrategy MappingStrategy { get; set; } = QueueMappingStrategy.Single;
+
+    /// <summary>
+    /// The number of partitions for partitioned entities. Default is 1 (no partitioning).
+    /// Used with HashBased and RoundRobin mapping strategies.
+    /// </summary>
+    public int PartitionCount { get; set; } = 1;
+
+    /// <summary>
+    /// Mapping from stream namespace to partition number for NamespaceBased strategy.
+    /// </summary>
+    public Dictionary<string, int> NamespaceToPartitionMap { get; set; } = new();
+
+    /// <summary>
+    /// The default partition to use for unmapped namespaces in NamespaceBased strategy.
+    /// </summary>
+    public int DefaultPartition { get; set; } = 0;
+
+    /// <summary>
+    /// List of entity names for multiple entity scenarios.
+    /// When provided, overrides single EntityName for multi-entity mapping.
+    /// </summary>
+    public List<string> EntityNames { get; set; } = new();
+
+    /// <summary>
+    /// List of subscription names for topic mode with multiple subscriptions.
+    /// Used in conjunction with EntityNames for topic/subscription combinations.
+    /// </summary>
+    public List<string> SubscriptionNames { get; set; } = new();
 }

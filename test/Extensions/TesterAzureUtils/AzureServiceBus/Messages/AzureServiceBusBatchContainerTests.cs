@@ -8,6 +8,8 @@ using Orleans.Serialization;
 using Orleans.Streaming.AzureServiceBus.Messages;
 using Xunit;
 
+#nullable enable
+
 namespace TesterAzureUtils.AzureServiceBus.Messages
 {
     /// <summary>
@@ -165,7 +167,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             Assert.Equal(3, splitBatches[1].BatchContainers.Count);
             
             // Last batch should have 1 item
-            Assert.Equal(1, splitBatches[2].BatchContainers.Count);
+            Assert.Single(splitBatches[2].BatchContainers);
             
             // Check batch IDs
             Assert.Equal("test-batch_part_0", splitBatches[0].BatchId);
@@ -230,7 +232,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
         {
             // Act & Assert
             Assert.Throws<ArgumentNullException>(() => 
-                AzureServiceBusBatchContainer.CreateBatch(null, "test-batch"));
+                AzureServiceBusBatchContainer.CreateBatch(null!, "test-batch"));
         }
 
         [Fact]
@@ -249,7 +251,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
         private AzureServiceBusMessage CreateTestMessage(StreamId streamId, long sequenceNumber, string eventData)
         {
             var sequenceToken = new EventSequenceTokenV2(sequenceNumber, 0);
-            var payload = _serializer.SerializeToArray(eventData);
+            var events = new List<object> { eventData };
             var metadata = new ServiceBusMessageMetadata(
                 Guid.NewGuid().ToString(),
                 DateTimeOffset.UtcNow);
@@ -257,7 +259,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             return new AzureServiceBusMessage(
                 streamId,
                 sequenceToken,
-                payload,
+                events,
                 metadata: metadata);
         }
     }

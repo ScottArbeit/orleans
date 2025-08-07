@@ -53,13 +53,14 @@ public class RetryHelperTests
     }
 
     [Fact]
-    public void TaskCompletion_SuccessScenario_CompletesImmediately()
+    public async Task TaskCompletion_SuccessScenario_CompletesImmediately()
     {
         // Test that successful operations complete without retry
         var task = Task.FromResult("success");
         
         Assert.True(task.IsCompletedSuccessfully);
-        Assert.Equal("success", task.Result);
+        var result = await task;
+        Assert.Equal("success", result);
     }
 
     [Fact]

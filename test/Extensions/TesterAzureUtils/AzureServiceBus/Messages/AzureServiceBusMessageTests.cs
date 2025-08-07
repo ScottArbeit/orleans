@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
 using Orleans.Serialization;
 using Orleans.Streaming.AzureServiceBus.Messages;
 using Xunit;
+
+#nullable enable
 
 namespace TesterAzureUtils.AzureServiceBus.Messages
 {
@@ -31,7 +34,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             // Arrange
             var streamId = StreamId.Create("test-namespace", "test-key");
             var sequenceToken = new EventSequenceTokenV2(12345, 0);
-            var payload = "test-payload"u8.ToArray();
+            var events = new List<object> { "test-payload", 42, new { Property = "value" } };
             var requestContext = new Dictionary<string, object> { { "key1", "value1" }, { "key2", 42 } };
             var metadata = new ServiceBusMessageMetadata(
                 "test-message-id",
@@ -42,7 +45,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             var originalMessage = new AzureServiceBusMessage(
                 streamId,
                 sequenceToken,
-                payload,
+                events,
                 requestContext,
                 metadata,
                 "batch-id",
@@ -55,7 +58,8 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             // Assert
             Assert.Equal(originalMessage.StreamId, deserializedMessage.StreamId);
             Assert.Equal(originalMessage.SequenceToken, deserializedMessage.SequenceToken);
-            Assert.Equal(originalMessage.Payload.ToArray(), deserializedMessage.Payload.ToArray());
+            Assert.Equal(originalMessage.Events.Count, deserializedMessage.Events.Count);
+            Assert.Equal(originalMessage.Events.First().ToString(), deserializedMessage.Events.First().ToString());
             Assert.Equal(originalMessage.RequestContext.Count, deserializedMessage.RequestContext.Count);
             Assert.Equal(originalMessage.Metadata.MessageId, deserializedMessage.Metadata.MessageId);
             Assert.Equal(originalMessage.BatchId, deserializedMessage.BatchId);
@@ -69,19 +73,19 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             var streamId = StreamId.Create("test-namespace", "test-key");
             var sequenceToken = new EventSequenceTokenV2(12345, 0);
             var testData = "test-event";
-            var payload = _serializer.SerializeToArray(testData);
-            var message = new AzureServiceBusMessage(streamId, sequenceToken, payload);
+            var events = new List<object> { testData };
+            var message = new AzureServiceBusMessage(streamId, sequenceToken, events);
 
             // Act
-            var events = message.GetEvents<byte[]>();
+            var retrievedEvents = message.GetEvents<string>();
             var importResult = message.ImportRequestContext();
 
             // Assert
-            Assert.Single(events);
+            Assert.Single(retrievedEvents);
             Assert.False(importResult); // No request context to import
             
-            var eventTuple = Assert.Single(events);
-            Assert.Equal(payload, eventTuple.Item1);
+            var eventTuple = Assert.Single(retrievedEvents);
+            Assert.Equal(testData, eventTuple.Item1);
             Assert.Equal(sequenceToken, eventTuple.Item2);
         }
 
@@ -91,7 +95,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             // Arrange
             var streamId = StreamId.Create("test-namespace", "test-key");
             var sequenceToken = new EventSequenceTokenV2(12345, 0);
-            var payload = "test-payload"u8.ToArray();
+            var events = new List<object> { "test-payload" };
             var requestContext = new Dictionary<string, object>
             {
                 { "ActivityId", Guid.NewGuid().ToString() },
@@ -101,7 +105,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             var message = new AzureServiceBusMessage(
                 streamId,
                 sequenceToken,
-                payload,
+                events,
                 requestContext);
 
             // Act
@@ -117,9 +121,9 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             // Arrange
             var streamId = StreamId.Create("test-namespace", "test-key");
             var sequenceToken = new EventSequenceTokenV2(12345, 0);
-            var emptyPayload = ReadOnlyMemory<byte>.Empty;
+            var emptyEvents = new List<object>();
 
-            var message = new AzureServiceBusMessage(streamId, sequenceToken, emptyPayload);
+            var message = new AzureServiceBusMessage(streamId, sequenceToken, emptyEvents);
 
             // Act
             var events = message.GetEvents<object>();
@@ -134,8 +138,8 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             // Arrange
             var streamId = StreamId.Create("test-namespace", "test-key");
             var sequenceToken = new EventSequenceTokenV2(12345, 0);
-            var payload = "test-payload"u8.ToArray();
-            var originalMessage = new AzureServiceBusMessage(streamId, sequenceToken, payload);
+            var events = new List<object> { "test-payload" };
+            var originalMessage = new AzureServiceBusMessage(streamId, sequenceToken, events);
 
             // Act
             var updatedMessage = originalMessage.WithBatchInfo("new-batch-id", 10);
@@ -145,7 +149,8 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             Assert.Equal("new-batch-id", updatedMessage.BatchId);
             Assert.Equal(10, updatedMessage.BatchPosition);
             Assert.Equal(originalMessage.StreamId, updatedMessage.StreamId);
-            Assert.Equal(originalMessage.Payload.ToArray(), updatedMessage.Payload.ToArray());
+            Assert.Equal(originalMessage.Events.Count, updatedMessage.Events.Count);
+            Assert.Equal(originalMessage.Events.First().ToString(), updatedMessage.Events.First().ToString());
         }
 
         [Fact]
@@ -155,8 +160,8 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             var streamId = StreamId.Create("test-namespace", "test-key");
             var originalToken = new EventSequenceTokenV2(12345, 0);
             var newToken = new EventSequenceTokenV2(67890, 1);
-            var payload = "test-payload"u8.ToArray();
-            var originalMessage = new AzureServiceBusMessage(streamId, originalToken, payload);
+            var events = new List<object> { "test-payload" };
+            var originalMessage = new AzureServiceBusMessage(streamId, originalToken, events);
 
             // Act
             var updatedMessage = originalMessage.WithSequenceToken(newToken);
@@ -165,7 +170,8 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             Assert.NotSame(originalMessage, updatedMessage);
             Assert.Equal(newToken, updatedMessage.SequenceToken);
             Assert.Equal(originalMessage.StreamId, updatedMessage.StreamId);
-            Assert.Equal(originalMessage.Payload.ToArray(), updatedMessage.Payload.ToArray());
+            Assert.Equal(originalMessage.Events.Count, updatedMessage.Events.Count);
+            Assert.Equal(originalMessage.Events.First().ToString(), updatedMessage.Events.First().ToString());
         }
 
         [Fact]
