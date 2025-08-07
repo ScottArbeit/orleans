@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Azure.Messaging.ServiceBus;
 using Orleans.Serialization;
 
 #nullable enable
@@ -65,6 +66,23 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
         /// </summary>
         [Id(8)]
         public TimeSpan? TimeToLive { get; init; }
+
+        /// <summary>
+        /// Gets the original Service Bus message (not serialized - used for acknowledgment).
+        /// This is set during message processing and is not persisted.
+        /// </summary>
+        [NonSerialized]
+        internal ServiceBusReceivedMessage? _originalServiceBusMessage;
+
+        /// <summary>
+        /// Gets or sets the original Service Bus message (not serialized - used for acknowledgment).
+        /// This is set during message processing and is not persisted.
+        /// </summary>
+        internal ServiceBusReceivedMessage? OriginalServiceBusMessage 
+        { 
+            get => _originalServiceBusMessage;
+            set => _originalServiceBusMessage = value;
+        }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ServiceBusMessageMetadata"/> class.
