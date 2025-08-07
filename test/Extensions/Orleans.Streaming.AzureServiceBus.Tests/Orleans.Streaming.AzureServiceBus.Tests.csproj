@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>$(TestTargetFrameworks)</TargetFrameworks>
+    <OrleansBuildTimeCodeGen>true</OrleansBuildTimeCodeGen>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Azure.Messaging.ServiceBus" />
+    <PackageReference Include="DotNet.Testcontainers" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(SourceRoot)src\Azure\Orleans.Streaming.AzureServiceBus\Orleans.Streaming.AzureServiceBus.csproj" />
+    <ProjectReference Include="$(SourceRoot)src\Orleans.TestingHost\Orleans.TestingHost.csproj" />
+    <ProjectReference Include="$(SourceRoot)test\TestInfrastructure\TestExtensions\TestExtensions.csproj" />
+    <ProjectReference Include="$(SourceRoot)test\Tester\Tester.csproj" />
+    <ProjectReference Include="..\TesterAzureUtils\Tester.AzureUtils.csproj" />
+  </ItemGroup>
+</Project>
