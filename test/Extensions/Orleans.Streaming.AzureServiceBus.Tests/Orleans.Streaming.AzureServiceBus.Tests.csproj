@@ -7,7 +7,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Azure.Messaging.ServiceBus" />
-    <PackageReference Include="DotNet.Testcontainers" />
+    <PackageReference Include="Testcontainers" />
     <PackageReference Include="System.Diagnostics.PerformanceCounter" />
   </ItemGroup>
 
