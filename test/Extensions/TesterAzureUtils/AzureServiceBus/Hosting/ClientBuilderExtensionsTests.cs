@@ -32,10 +32,12 @@ public class ClientBuilderExtensionsTests
     {
         // Arrange
         var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var builder = new ClientBuilder(services, configuration);
         
         // Act & Assert
         Assert.Throws<ArgumentException>(() => 
-            services.AddAzureServiceBusStreaming(null, options => { }));
+            builder.AddAzureServiceBusStreaming(null, options => { }));
     }
 
     [Fact]
@@ -43,10 +45,12 @@ public class ClientBuilderExtensionsTests
     {
         // Arrange
         var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var builder = new ClientBuilder(services, configuration);
         
         // Act & Assert
         Assert.Throws<ArgumentException>(() => 
-            services.AddAzureServiceBusStreaming("", options => { }));
+            builder.AddAzureServiceBusStreaming("", options => { }));
     }
 
     [Fact]
@@ -54,10 +58,12 @@ public class ClientBuilderExtensionsTests
     {
         // Arrange
         var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var builder = new ClientBuilder(services, configuration);
         
         // Act & Assert
         Assert.Throws<ArgumentException>(() => 
-            services.AddAzureServiceBusStreaming("   ", options => { }));
+            builder.AddAzureServiceBusStreaming("   ", options => { }));
     }
 
     [Fact]
@@ -65,11 +71,27 @@ public class ClientBuilderExtensionsTests
     {
         // Arrange
         var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var builder = new ClientBuilder(services, configuration);
         Action<AzureServiceBusOptions> configure = null;
         
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() => 
-            services.AddAzureServiceBusStreaming("test", configure));
+            builder.AddAzureServiceBusStreaming("test", configure));
+    }
+
+    [Fact]
+    public void AddAzureServiceBusStreaming_NullConfiguration_ThrowsArgumentNullException()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var builder = new ClientBuilder(services, configuration);
+        IConfiguration config = null;
+        
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => 
+            builder.AddAzureServiceBusStreaming("test", config));
     }
 
     [Theory]
@@ -87,10 +109,12 @@ public class ClientBuilderExtensionsTests
     {
         // Arrange
         var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var builder = new ClientBuilder(services, configuration);
         
         // Act & Assert
         Assert.Throws<ArgumentException>(() => 
-            services.AddAzureServiceBusQueueStreaming(name, connectionString, queueName));
+            builder.AddAzureServiceBusQueueStreaming(name, connectionString, queueName));
     }
 
     [Theory]
@@ -111,9 +135,11 @@ public class ClientBuilderExtensionsTests
     {
         // Arrange
         var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var builder = new ClientBuilder(services, configuration);
         
         // Act & Assert
         Assert.Throws<ArgumentException>(() => 
-            services.AddAzureServiceBusTopicStreaming(name, connectionString, topicName, subscriptionName));
+            builder.AddAzureServiceBusTopicStreaming(name, connectionString, topicName, subscriptionName));
     }
 }
