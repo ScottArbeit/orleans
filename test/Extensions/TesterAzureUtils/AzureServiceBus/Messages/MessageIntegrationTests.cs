@@ -7,6 +7,8 @@ using Orleans.Serialization;
 using Orleans.Streaming.AzureServiceBus.Messages;
 using Xunit;
 
+#nullable enable
+
 namespace TesterAzureUtils.AzureServiceBus.Messages
 {
     /// <summary>
@@ -69,8 +71,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
                 timeToLive: serviceBusMessage.TimeToLive,
                 sequenceNumber: 12345,
                 deliveryCount: 1,
-                enqueuedTime: DateTimeOffset.UtcNow,
-                applicationProperties: serviceBusMessage.ApplicationProperties);
+                enqueuedTime: DateTimeOffset.UtcNow);
 
             // Act 4: Convert back to Orleans message
             var receivedOrleansMessage = _factory.CreateFromServiceBusMessage(receivedMessage, streamId);
@@ -156,8 +157,7 @@ namespace TesterAzureUtils.AzureServiceBus.Messages
             // Act 2: Extract request context from Service Bus message
             var simulatedReceivedMessage = ServiceBusModelFactory.ServiceBusReceivedMessage(
                 body: serviceBusMessage.Body,
-                messageId: serviceBusMessage.MessageId,
-                applicationProperties: serviceBusMessage.ApplicationProperties);
+                messageId: serviceBusMessage.MessageId);
 
             var extractedContext = _factory.ExtractRequestContext(simulatedReceivedMessage);
 
