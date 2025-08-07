@@ -83,7 +83,6 @@ public class SiloBuilderExtensionsTests
     }
 
 
-
     [Theory]
     [InlineData(null, "conn", "queue")]
     [InlineData("", "conn", "queue")]
