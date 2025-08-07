@@ -3,13 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Orleans;
 using Orleans.Configuration;
 using Orleans.Hosting;
 using Orleans.Runtime;
 using Orleans.Streaming.AzureServiceBus.Providers;
-using Orleans.TestingHost;
 using Xunit;
 
 namespace Orleans.Streaming.AzureServiceBus.Tests.Hosting;
@@ -35,11 +32,10 @@ public class SiloBuilderExtensionsTests
     {
         // Arrange
         var services = new ServiceCollection();
-        var siloBuilder = new SiloHostBuilder().ConfigureServices(s => { });
         
         // Act & Assert
         Assert.Throws<ArgumentException>(() => 
-            siloBuilder.AddAzureServiceBusStreaming(null, options => { }));
+            services.AddAzureServiceBusStreaming(null, options => { }));
     }
 
     [Fact]
@@ -47,11 +43,10 @@ public class SiloBuilderExtensionsTests
     {
         // Arrange  
         var services = new ServiceCollection();
-        var siloBuilder = new SiloHostBuilder().ConfigureServices(s => { });
         
         // Act & Assert
         Assert.Throws<ArgumentException>(() => 
-            siloBuilder.AddAzureServiceBusStreaming("", options => { }));
+            services.AddAzureServiceBusStreaming("", options => { }));
     }
 
     [Fact]
@@ -59,11 +54,10 @@ public class SiloBuilderExtensionsTests
     {
         // Arrange
         var services = new ServiceCollection();
-        var siloBuilder = new SiloHostBuilder().ConfigureServices(s => { });
         
         // Act & Assert
         Assert.Throws<ArgumentException>(() => 
-            siloBuilder.AddAzureServiceBusStreaming("   ", options => { }));
+            services.AddAzureServiceBusStreaming("   ", options => { }));
     }
 
     [Fact]
@@ -71,50 +65,11 @@ public class SiloBuilderExtensionsTests
     {
         // Arrange
         var services = new ServiceCollection();
-        var siloBuilder = new SiloHostBuilder().ConfigureServices(s => { });
         Action<AzureServiceBusOptions> configure = null;
         
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() => 
-            siloBuilder.AddAzureServiceBusStreaming("test", configure));
-    }
-
-    [Fact]
-    public void AddAzureServiceBusStreaming_WithIConfiguration_ReturnsBuilder()
-    {
-        // Arrange
-        var services = new ServiceCollection();
-        var siloBuilder = new SiloHostBuilder().ConfigureServices(s => { });
-        
-        var configData = new Dictionary<string, string>
-        {
-            {"ConnectionString", "Endpoint=sb://test.servicebus.windows.net/;SharedAccessKeyName=key;SharedAccessKey=value"},
-            {"EntityName", "testqueue"},
-            {"EntityMode", "Queue"}
-        };
-        var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(configData)
-            .Build();
-        
-        // Act
-        var result = siloBuilder.AddAzureServiceBusStreaming("test-provider", configuration);
-        
-        // Assert
-        Assert.NotNull(result);
-        Assert.Same(siloBuilder, result);
-    }
-
-    [Fact]
-    public void AddAzureServiceBusStreaming_NullConfiguration_ThrowsArgumentNullException()
-    {
-        // Arrange
-        var services = new ServiceCollection();
-        var siloBuilder = new SiloHostBuilder().ConfigureServices(s => { });
-        IConfiguration configuration = null;
-        
-        // Act & Assert
-        Assert.Throws<ArgumentNullException>(() => 
-            siloBuilder.AddAzureServiceBusStreaming("test", configuration));
+            services.AddAzureServiceBusStreaming("test", configure));
     }
 
     [Theory]
@@ -132,11 +87,10 @@ public class SiloBuilderExtensionsTests
     {
         // Arrange
         var services = new ServiceCollection();
-        var siloBuilder = new SiloHostBuilder().ConfigureServices(s => { });
         
         // Act & Assert
         Assert.Throws<ArgumentException>(() => 
-            siloBuilder.AddAzureServiceBusQueueStreaming(name, connectionString, queueName));
+            services.AddAzureServiceBusQueueStreaming(name, connectionString, queueName));
     }
 
     [Theory]
@@ -157,10 +111,9 @@ public class SiloBuilderExtensionsTests
     {
         // Arrange
         var services = new ServiceCollection();
-        var siloBuilder = new SiloHostBuilder().ConfigureServices(s => { });
         
         // Act & Assert
         Assert.Throws<ArgumentException>(() => 
-            siloBuilder.AddAzureServiceBusTopicStreaming(name, connectionString, topicName, subscriptionName));
+            services.AddAzureServiceBusTopicStreaming(name, connectionString, topicName, subscriptionName));
     }
 }
