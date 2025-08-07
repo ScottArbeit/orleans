@@ -19,10 +19,8 @@ public class SiloBuilderExtensionsTests
     [Fact]
     public void AddAzureServiceBusStreaming_NullBuilder_ThrowsArgumentNullException()
     {
-        // Arrange
         ISiloBuilder builder = null;
         
-        // Act & Assert
         Assert.Throws<ArgumentNullException>(() => 
             builder.AddAzureServiceBusStreaming("test", options => { }));
     }
@@ -30,10 +28,8 @@ public class SiloBuilderExtensionsTests
     [Fact]
     public void AddAzureServiceBusStreaming_NullName_ThrowsArgumentException()
     {
-        // Arrange
         var services = new ServiceCollection();
         
-        // Act & Assert
         Assert.Throws<ArgumentException>(() => 
             services.AddAzureServiceBusStreaming(null, options => { }));
     }
@@ -41,10 +37,8 @@ public class SiloBuilderExtensionsTests
     [Fact]
     public void AddAzureServiceBusStreaming_EmptyName_ThrowsArgumentException()
     {
-        // Arrange  
         var services = new ServiceCollection();
         
-        // Act & Assert
         Assert.Throws<ArgumentException>(() => 
             services.AddAzureServiceBusStreaming("", options => { }));
     }
@@ -52,10 +46,8 @@ public class SiloBuilderExtensionsTests
     [Fact]
     public void AddAzureServiceBusStreaming_WhitespaceName_ThrowsArgumentException()
     {
-        // Arrange
         var services = new ServiceCollection();
         
-        // Act & Assert
         Assert.Throws<ArgumentException>(() => 
             services.AddAzureServiceBusStreaming("   ", options => { }));
     }
@@ -63,11 +55,9 @@ public class SiloBuilderExtensionsTests
     [Fact]
     public void AddAzureServiceBusStreaming_NullConfigureAction_ThrowsArgumentNullException()
     {
-        // Arrange
         var services = new ServiceCollection();
         Action<AzureServiceBusOptions> configure = null;
         
-        // Act & Assert
         Assert.Throws<ArgumentNullException>(() => 
             services.AddAzureServiceBusStreaming("test", configure));
     }
@@ -85,16 +75,14 @@ public class SiloBuilderExtensionsTests
     public void AddAzureServiceBusQueueStreaming_InvalidParameters_ThrowsArgumentException(
         string name, string connectionString, string queueName)
     {
-        // Arrange
         var services = new ServiceCollection();
-        
-        // Act & Assert
-        Assert.Throws<ArgumentException>(() => 
-        ISiloBuilder builder = null;
-        
-        // Act & Assert
-        Assert.Throws<ArgumentNullException>(() =>
-            builder.AddAzureServiceBusQueueStreaming(name, connectionString, queueName));
+
+        Assert.Throws<ArgumentException>(() =>
+        {
+            var configuration = new ConfigurationBuilder().Build();
+            var builder = new SiloBuilder(services, configuration);
+            builder.AddAzureServiceBusQueueStreaming(name, connectionString, queueName);
+        });
     }
 
     [Theory]
@@ -113,10 +101,8 @@ public class SiloBuilderExtensionsTests
     public void AddAzureServiceBusTopicStreaming_InvalidParameters_ThrowsArgumentException(
         string name, string connectionString, string topicName, string subscriptionName)
     {
-        // Arrange
         var services = new ServiceCollection();
         
-        // Act & Assert
         Assert.Throws<ArgumentException>(() => 
             services.AddAzureServiceBusTopicStreaming(name, connectionString, topicName, subscriptionName));
     }

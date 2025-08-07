@@ -26,7 +26,6 @@ public class AzureServiceBusValidationTests
 
         var validator = new AzureServiceBusOptionsValidator(options, "test");
 
-        // Should not throw
         validator.ValidateConfiguration();
     }
 
@@ -43,7 +42,6 @@ public class AzureServiceBusValidationTests
 
         var validator = new AzureServiceBusOptionsValidator(options, "test");
 
-        // Should not throw
         validator.ValidateConfiguration();
     }
 
@@ -120,7 +118,6 @@ public class AzureServiceBusValidationTests
 
         var validator = new AzureServiceBusOptionsValidator(options, "test");
 
-        // Should not throw
         validator.ValidateConfiguration();
     }
 
@@ -159,7 +156,6 @@ public class AzureServiceBusValidationTests
 
         var validator = new AzureServiceBusOptionsValidator(options, "test");
 
-        // Should not throw
         validator.ValidateConfiguration();
     }
 
@@ -197,7 +193,6 @@ public class AzureServiceBusValidationTests
 
         var validator = new AzureServiceBusOptionsValidator(options, "test");
 
-        // Should not throw
         validator.ValidateConfiguration();
     }
 
@@ -303,7 +298,6 @@ public class AzureServiceBusValidationTests
 
         var validator = new AzureServiceBusOptionsValidator(options, "test");
 
-        // Should not throw
         validator.ValidateConfiguration();
     }
 
@@ -318,7 +312,6 @@ public class AzureServiceBusValidationTests
     {
         var options = new AzureServiceBusOptions();
         
-        // Should not throw - null name is acceptable
         var validator = new AzureServiceBusOptionsValidator(options, null);
         Assert.NotNull(validator);
     }
