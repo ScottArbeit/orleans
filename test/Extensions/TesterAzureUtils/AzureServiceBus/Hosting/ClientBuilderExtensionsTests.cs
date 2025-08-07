@@ -1,0 +1,145 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Orleans.Configuration;
+using Orleans.Hosting;
+using Orleans.Runtime;
+using Orleans.Streaming.AzureServiceBus.Providers;
+using Xunit;
+
+namespace Orleans.Streaming.AzureServiceBus.Tests.Hosting;
+
+/// <summary>
+/// Tests for Azure Service Bus ClientBuilder extensions.
+/// </summary>
+public class ClientBuilderExtensionsTests
+{
+    [Fact]
+    public void AddAzureServiceBusStreaming_NullBuilder_ThrowsArgumentNullException()
+    {
+        // Arrange
+        IClientBuilder builder = null;
+        
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => 
+            builder.AddAzureServiceBusStreaming("test", options => { }));
+    }
+
+    [Fact]
+    public void AddAzureServiceBusStreaming_NullName_ThrowsArgumentException()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var builder = new ClientBuilder(services, configuration);
+        
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => 
+            builder.AddAzureServiceBusStreaming(null, options => { }));
+    }
+
+    [Fact]
+    public void AddAzureServiceBusStreaming_EmptyName_ThrowsArgumentException()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var builder = new ClientBuilder(services, configuration);
+        
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => 
+            builder.AddAzureServiceBusStreaming("", options => { }));
+    }
+
+    [Fact]
+    public void AddAzureServiceBusStreaming_WhitespaceName_ThrowsArgumentException()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var builder = new ClientBuilder(services, configuration);
+        
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => 
+            builder.AddAzureServiceBusStreaming("   ", options => { }));
+    }
+
+    [Fact]
+    public void AddAzureServiceBusStreaming_NullConfigureAction_ThrowsArgumentNullException()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var builder = new ClientBuilder(services, configuration);
+        Action<AzureServiceBusOptions> configure = null;
+        
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => 
+            builder.AddAzureServiceBusStreaming("test", configure));
+    }
+
+    [Fact]
+    public void AddAzureServiceBusStreaming_NullConfiguration_ThrowsArgumentNullException()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var builder = new ClientBuilder(services, configuration);
+        IConfiguration config = null;
+        
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() => 
+            builder.AddAzureServiceBusStreaming("test", config));
+    }
+
+    [Theory]
+    [InlineData(null, "conn", "queue")]
+    [InlineData("", "conn", "queue")]
+    [InlineData("   ", "conn", "queue")]
+    [InlineData("name", null, "queue")]
+    [InlineData("name", "", "queue")]
+    [InlineData("name", "   ", "queue")]
+    [InlineData("name", "conn", null)]
+    [InlineData("name", "conn", "")]
+    [InlineData("name", "conn", "   ")]
+    public void AddAzureServiceBusQueueStreaming_InvalidParameters_ThrowsArgumentException(
+        string name, string connectionString, string queueName)
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var builder = new ClientBuilder(services, configuration);
+        
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => 
+            builder.AddAzureServiceBusQueueStreaming(name, connectionString, queueName));
+    }
+
+    [Theory]
+    [InlineData(null, "conn", "topic", "sub")]
+    [InlineData("", "conn", "topic", "sub")]
+    [InlineData("   ", "conn", "topic", "sub")]
+    [InlineData("name", null, "topic", "sub")]
+    [InlineData("name", "", "topic", "sub")]
+    [InlineData("name", "   ", "topic", "sub")]
+    [InlineData("name", "conn", null, "sub")]
+    [InlineData("name", "conn", "", "sub")]
+    [InlineData("name", "conn", "   ", "sub")]
+    [InlineData("name", "conn", "topic", null)]
+    [InlineData("name", "conn", "topic", "")]
+    [InlineData("name", "conn", "topic", "   ")]
+    public void AddAzureServiceBusTopicStreaming_InvalidParameters_ThrowsArgumentException(
+        string name, string connectionString, string topicName, string subscriptionName)
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder().Build();
+        var builder = new ClientBuilder(services, configuration);
+        
+        // Act & Assert
+        Assert.Throws<ArgumentException>(() => 
+            builder.AddAzureServiceBusTopicStreaming(name, connectionString, topicName, subscriptionName));
+    }
+}
