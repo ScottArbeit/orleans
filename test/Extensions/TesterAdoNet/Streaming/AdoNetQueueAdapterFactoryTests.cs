@@ -125,7 +125,7 @@ public abstract class AdoNetQueueAdapterFactoryTests(string invariant, TestEnvir
         // assert
         Assert.NotNull(handler);
         Assert.IsType<AdoNetStreamFailureHandler>(handler);
-        Assert.False(handler.ShouldFaultSubsriptionOnError);
+        Assert.False(handler.ShouldFaultSubscriptionOnError);
     }
 
     /// <summary>

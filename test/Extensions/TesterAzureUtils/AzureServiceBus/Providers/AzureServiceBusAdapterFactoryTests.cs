@@ -228,7 +228,7 @@ public class AzureServiceBusAdapterFactoryTests
 
         // Assert
         Assert.NotNull(handler);
-        Assert.False(handler.ShouldFaultSubsriptionOnError); // Service Bus handler should not fault by default
+        Assert.False(handler.ShouldFaultSubscriptionOnError); // Service Bus handler should not fault by default
     }
 
     [Fact]

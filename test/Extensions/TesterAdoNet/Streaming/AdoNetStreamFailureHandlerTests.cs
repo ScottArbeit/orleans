@@ -82,7 +82,7 @@ public abstract class AdoNetStreamFailureHandlerTests(string invariant) : IAsync
         var handler = new AdoNetStreamFailureHandler(faultOnFailure, streamOptions, clusterOptions, mapper, _queries, logger);
 
         // assert
-        Assert.Equal(faultOnFailure, handler.ShouldFaultSubsriptionOnError);
+        Assert.Equal(faultOnFailure, handler.ShouldFaultSubscriptionOnError);
     }
 
     /// <summary>
