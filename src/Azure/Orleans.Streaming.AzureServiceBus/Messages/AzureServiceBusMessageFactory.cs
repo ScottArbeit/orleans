@@ -90,7 +90,10 @@ namespace Orleans.Streaming.AzureServiceBus.Messages
                 subject: serviceBusMessage.Subject,
                 applicationProperties: serviceBusMessage.ApplicationProperties?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
                 partitionKey: serviceBusMessage.PartitionKey,
-                timeToLive: serviceBusMessage.TimeToLive);
+                timeToLive: serviceBusMessage.TimeToLive)
+            {
+                OriginalServiceBusMessage = serviceBusMessage
+            };
 
             // Deserialize the message body to get the event objects
             var payload = serviceBusMessage.Body.ToMemory();
