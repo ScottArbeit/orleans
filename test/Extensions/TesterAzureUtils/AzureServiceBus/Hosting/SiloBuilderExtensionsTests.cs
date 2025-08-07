@@ -90,7 +90,11 @@ public class SiloBuilderExtensionsTests
         
         // Act & Assert
         Assert.Throws<ArgumentException>(() => 
-            services.AddAzureServiceBusQueueStreaming(name, connectionString, queueName));
+        ISiloBuilder builder = null;
+        
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() =>
+            builder.AddAzureServiceBusQueueStreaming(name, connectionString, queueName));
     }
 
     [Theory]
