@@ -1,9 +1,16 @@
+#nullable enable
 using Orleans.Streaming.AzureServiceBus.Tests.Infrastructure;
+using Microsoft.Extensions.Configuration;
 using Orleans.Streams;
+using Microsoft.Extensions.Configuration;
 using Orleans.TestingHost;
+using Microsoft.Extensions.Configuration;
 using TestExtensions;
+using Microsoft.Extensions.Configuration;
 using Xunit;
+using Microsoft.Extensions.Configuration;
 using Xunit.Abstractions;
+using Microsoft.Extensions.Configuration;
 
 namespace Orleans.Streaming.AzureServiceBus.Tests.Streaming;
 
@@ -348,7 +355,7 @@ public class ServiceBusStreamRecoveryTests : TestClusterPerTest
 
     private class MyClientBuilderConfigurator : IClientBuilderConfigurator
     {
-        public void Configure(IClientBuilder clientBuilder)
+        public void Configure(IConfiguration configuration, IClientBuilder clientBuilder)
         {
             clientBuilder.AddServiceBusQueueStreams(StreamProviderName, configure =>
             {

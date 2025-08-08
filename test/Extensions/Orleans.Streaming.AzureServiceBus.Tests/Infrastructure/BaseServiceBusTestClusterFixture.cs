@@ -1,7 +1,12 @@
+#nullable enable
 using Orleans.Configuration;
+using Microsoft.Extensions.Configuration;
 using Orleans.TestingHost;
+using Microsoft.Extensions.Configuration;
 using TestExtensions;
+using Microsoft.Extensions.Configuration;
 using Xunit;
+using Microsoft.Extensions.Configuration;
 
 namespace Orleans.Streaming.AzureServiceBus.Tests.Infrastructure;
 
@@ -73,7 +78,7 @@ public class ServiceBusQueueTestClusterFixture : BaseServiceBusTestClusterFixtur
 
     private class ClientConfigurator : IClientBuilderConfigurator
     {
-        public void Configure(IClientBuilder clientBuilder)
+        public void Configure(IConfiguration configuration, IClientBuilder clientBuilder)
         {
             clientBuilder.AddServiceBusQueueStreams(StreamProviderName, configure =>
             {
@@ -118,7 +123,7 @@ public class ServiceBusTopicTestClusterFixture : BaseServiceBusTestClusterFixtur
 
     private class ClientConfigurator : IClientBuilderConfigurator
     {
-        public void Configure(IClientBuilder clientBuilder)
+        public void Configure(IConfiguration configuration, IClientBuilder clientBuilder)
         {
             clientBuilder.AddServiceBusTopicStreams(StreamProviderName, configure =>
             {

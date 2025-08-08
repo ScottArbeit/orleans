@@ -1,3 +1,5 @@
+#nullable enable
+using Microsoft.Extensions.Configuration;
 using Orleans.Streaming.AzureServiceBus.Tests.Infrastructure;
 using Orleans.Streams;
 using Orleans.TestingHost;
@@ -202,7 +204,7 @@ public class ServiceBusClientStreamTests : TestClusterPerTest
 
     private class MyClientBuilderConfigurator : IClientBuilderConfigurator
     {
-        public void Configure(IClientBuilder clientBuilder)
+        public void Configure(IConfiguration configuration, IClientBuilder clientBuilder)
         {
             clientBuilder.AddServiceBusQueueStreams(StreamProviderName, configure =>
             {
