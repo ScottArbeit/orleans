@@ -427,4 +427,20 @@ public sealed partial class ServiceBusQueueCache : IQueueCache, IDisposable
         Message = "Azure Service Bus queue cache disposed for queue '{QueueId}'"
     )]
     private partial void LogDebugCacheDisposed(QueueId queueId);
+    /// <inheritdoc />
+    public int GetMaxAddCount()
+    {
+        // Return the maximum number of messages that can be added to the cache at once,
+        // based on the eviction policy's MaxCacheSize and current message count.
+        if (_disposed)
+        {
+            return 0;
+        }
+
+        lock (_lockObject)
+        {
+            var remaining = _evictionPolicy.MaxCacheSize - _messageCount;
+            return remaining > 0 ? remaining : 0;
+        }
+    }
 }
