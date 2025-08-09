@@ -54,7 +54,7 @@ public sealed partial class ServiceBusQueueCache : IQueueCache, IDisposable
         ILogger logger,
         ICacheMonitor? cacheMonitor = null)
     {
-        _queueId = queueId ?? throw new ArgumentNullException(nameof(queueId));
+        _queueId = queueId;
         _evictionPolicy = evictionPolicy ?? throw new ArgumentNullException(nameof(evictionPolicy));
         _pressureMonitor = pressureMonitor ?? throw new ArgumentNullException(nameof(pressureMonitor));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -418,7 +418,7 @@ public sealed partial class ServiceBusQueueCache : IQueueCache, IDisposable
 
     [LoggerMessage(
         Level = LogLevel.Warning,
-        Message = "Failed to add message to cache"
+        Message = "Failed to add message to cache with sequence token {SequenceToken}"
     )]
     private partial void LogWarningFailedToAddMessage(Exception exception, StreamSequenceToken sequenceToken);
 
@@ -427,4 +427,20 @@ public sealed partial class ServiceBusQueueCache : IQueueCache, IDisposable
         Message = "Azure Service Bus queue cache disposed for queue '{QueueId}'"
     )]
     private partial void LogDebugCacheDisposed(QueueId queueId);
+    /// <inheritdoc />
+    public int GetMaxAddCount()
+    {
+        // Return the maximum number of messages that can be added to the cache at once,
+        // based on the eviction policy's MaxCacheSize and current message count.
+        if (_disposed)
+        {
+            return 0;
+        }
+
+        lock (_lockObject)
+        {
+            var remaining = _evictionPolicy.MaxCacheSize - _messageCount;
+            return remaining > 0 ? remaining : 0;
+        }
+    }
 }
