@@ -102,7 +102,7 @@ public class ServiceBusQueueTests : TestClusterPerTest
         // Allow subscription to initialize
         await Task.Delay(1000);
 
-        // Send events with explicit sequence numbers
+        // Send events in order (Service Bus queues preserve FIFO within a session)
         var testEvents = new List<TestEvent>();
         for (int i = 0; i < 10; i++)
         {
@@ -110,9 +110,9 @@ public class ServiceBusQueueTests : TestClusterPerTest
             {
                 Id = Guid.NewGuid(),
                 StreamKey = streamId.Key,
-                SequenceNumber = i,
                 Timestamp = DateTimeOffset.UtcNow,
-                Data = $"Ordered message {i}"
+                Data = $"Ordered message {i}",
+                Properties = new Dictionary<string, object> { { "Index", i } }
             };
             testEvents.Add(evt);
             await stream.OnNextAsync(evt);
@@ -126,10 +126,12 @@ public class ServiceBusQueueTests : TestClusterPerTest
 
         Assert.Equal(testEvents.Count, receivedEvents.Count);
 
-        // Check if events are received in the same order they were sent
+        // Check if events are received in the same order they were sent (by checking Index property)
         for (int i = 0; i < testEvents.Count; i++)
         {
-            Assert.Equal(testEvents[i].SequenceNumber, receivedEvents[i].SequenceNumber);
+            var expectedIndex = (int)testEvents[i].Properties["Index"];
+            var receivedIndex = (int)receivedEvents[i].Properties["Index"];
+            Assert.Equal(expectedIndex, receivedIndex);
         }
 
         await handle.UnsubscribeAsync();

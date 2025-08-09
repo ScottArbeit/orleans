@@ -222,11 +222,11 @@ public class ServiceBusStreamPerformanceTests : TestClusterPerTest
         {
             Id = Guid.NewGuid(),
             StreamKey = "large-message-test",
-            SequenceNumber = i,
             Timestamp = DateTimeOffset.UtcNow,
             Data = $"Large message {i}: {largeDataPayload}",
             Properties = new Dictionary<string, object>
             {
+                { "Index", i },
                 { "MessageSize", largeDataPayload.Length },
                 { "Index", i }
             }

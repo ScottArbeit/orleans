@@ -287,11 +287,10 @@ public class ServiceBusSubscriptionTests : TestClusterPerTest
         var receivedEvents = new List<TestEvent>();
         var errorCount = 0;
 
-        var handle = await stream.SubscribeAsync(
-            onNext: (evt, token) =>
-            {
-                // Simulate processing error for first few events
-                if (errorCount < 2)
+        var handle = await stream.SubscribeAsync((evt, token) =>
+        {
+            // Simulate processing error for first few events
+            if (errorCount < 2)
                 {
                     errorCount++;
                     throw new InvalidOperationException($"Simulated processing error {errorCount}");

@@ -103,25 +103,25 @@ public class ServiceBusStreamRecoveryTests : TestClusterPerTest
     }
 
     /// <summary>
-    /// Tests stream resume from a specific sequence token.
+    /// Tests stream subscription resumption after unsubscribe.
+    /// Note: Azure Service Bus is non-rewindable - messages are delivered once and cannot be replayed from tokens.
+    /// This test verifies proper subscription lifecycle management.
     /// </summary>
     [Fact]
-    public async Task ServiceBusStreamRecovery_ResumeFromSequenceToken()
+    public async Task ServiceBusStreamRecovery_SubscriptionResumption()
     {
-        _output.WriteLine("Testing stream resume from sequence token");
+        _output.WriteLine("Testing stream subscription resumption (non-rewindable Service Bus)");
 
         var provider = this.Client.GetStreamProvider(StreamProviderName);
         var streamId = ServiceBusTestUtils.CreateTestStreamId(StreamNamespace);
         var stream = provider.GetStream<TestEvent>(streamId);
 
         var receivedEvents = new List<TestEvent>();
-        StreamSequenceToken? lastToken = null;
 
         // First subscription - process some events
         var handle1 = await stream.SubscribeAsync((evt, token) =>
         {
             receivedEvents.Add(evt);
-            lastToken = token;
             return Task.CompletedTask;
         });
 
@@ -137,13 +137,12 @@ public class ServiceBusStreamRecoveryTests : TestClusterPerTest
         await Task.Delay(3000);
         
         Assert.Equal(firstBatch.Count, receivedEvents.Count);
-        Assert.NotNull(lastToken);
 
         // Unsubscribe
         await handle1.UnsubscribeAsync();
         await Task.Delay(500);
 
-        // Send more events while unsubscribed
+        // Send more events while unsubscribed - these may be lost since Service Bus is non-rewindable
         var secondBatch = ServiceBusTestUtils.GenerateTestEvents(2).ToList();
         foreach (var evt in secondBatch)
         {
@@ -152,18 +151,18 @@ public class ServiceBusStreamRecoveryTests : TestClusterPerTest
 
         await Task.Delay(1000);
 
-        // Resume from the last known token
-        var resumedEvents = new List<TestEvent>();
+        // Create new subscription - cannot resume from previous point
+        var newSubscriptionEvents = new List<TestEvent>();
         var handle2 = await stream.SubscribeAsync((evt, token) =>
         {
-            resumedEvents.Add(evt);
+            newSubscriptionEvents.Add(evt);
             return Task.CompletedTask;
-        }, lastToken);
+        });
 
         await Task.Delay(3000);
 
-        // Should receive events sent while unsubscribed (if supported by Service Bus)
-        _output.WriteLine($"Resumed and received {resumedEvents.Count} events");
+        // Verify new subscription works (events sent while unsubscribed are typically lost)
+        _output.WriteLine($"New subscription received {newSubscriptionEvents.Count} events");
         
         await handle2.UnsubscribeAsync();
     }
@@ -235,8 +234,8 @@ public class ServiceBusStreamRecoveryTests : TestClusterPerTest
 
         var handle = await stream.SubscribeAsync((evt, token) =>
         {
-            // Simulate intermittent processing errors
-            if (evt.SequenceNumber % 3 == 0 && errorCount < maxErrors)
+            // Simulate intermittent processing errors based on event ID
+            if (evt.Id.ToString().EndsWith("0") && errorCount < maxErrors)
             {
                 errorCount++;
                 throw new InvalidOperationException($"Simulated intermittent error {errorCount}");

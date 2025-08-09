@@ -56,6 +56,7 @@ public static class ServiceBusTestUtils
 
     /// <summary>
     /// Generates test event data for streaming tests.
+    /// Note: Azure Service Bus is non-rewindable, so no sequence numbers are assigned.
     /// </summary>
     public static IEnumerable<TestEvent> GenerateTestEvents(int count, string streamKey = "test-stream")
     {
@@ -65,7 +66,6 @@ public static class ServiceBusTestUtils
             {
                 Id = Guid.NewGuid(),
                 StreamKey = streamKey,
-                SequenceNumber = i,
                 Timestamp = DateTimeOffset.UtcNow,
                 Data = $"Test data {i}",
                 Properties = new Dictionary<string, object>
@@ -147,12 +147,12 @@ public static class ServiceBusTestUtils
 
 /// <summary>
 /// Test event class for streaming integration tests.
+/// Note: Azure Service Bus is non-rewindable, so no sequence numbers are used.
 /// </summary>
 public class TestEvent
 {
     public Guid Id { get; set; }
     public string StreamKey { get; set; } = string.Empty;
-    public int SequenceNumber { get; set; }
     public DateTimeOffset Timestamp { get; set; }
     public string Data { get; set; } = string.Empty;
     public Dictionary<string, object> Properties { get; set; } = new();
