@@ -10,7 +10,18 @@ namespace Orleans.Streaming.AzureServiceBus;
 /// <summary>
 /// Orleans batch container for Azure Service Bus streaming provider.
 /// This implementation is modeled after the SQS provider and is non-rewindable with ephemeral sequence tokens.
+/// 
+/// <para>
+/// The sequence token used by this batch container is ephemeral and non-rewindable. It only provides
+/// a queue-local monotonic counter for ordering within a single Service Bus processing session.
+/// Unlike Event Hubs, this does not support rewind semantics or persistent offset tracking.
+/// </para>
 /// </summary>
+/// <remarks>
+/// This implementation follows the SQS pattern for non-rewindable streaming semantics as specified
+/// in the requirements. The sequence tokens are ephemeral and only valid within the current
+/// processing context.
+/// </remarks>
 [Serializable]
 [GenerateSerializer]
 public class ServiceBusBatchContainer : IBatchContainer
@@ -76,6 +87,16 @@ public class ServiceBusBatchContainer : IBatchContainer
         events = new List<object>();
         requestContext = new Dictionary<string, object>();
     }
+
+    /// <summary>
+    /// Gets the list of events in this batch (internal access for adapters).
+    /// </summary>
+    internal List<object> Events => events;
+
+    /// <summary>
+    /// Gets the request context dictionary (internal access for adapters).
+    /// </summary>
+    internal Dictionary<string, object> RequestContext => requestContext;
 
     /// <summary>
     /// Gets the events in this batch with their individual sequence tokens.

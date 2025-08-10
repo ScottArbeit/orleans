@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Azure.Messaging.ServiceBus;
+using Microsoft.Extensions.DependencyInjection;
 using Orleans.Runtime;
 using Orleans.Serialization;
 using Orleans.Streaming.AzureServiceBus;
@@ -28,6 +29,51 @@ public class ServiceBusBatchContainerSerializationTests
         // Assert
         Assert.Equal(streamId, container.StreamId);
         Assert.Equal(events.Count, container.GetEvents<object>().Count());
+    }
+
+    [Fact]
+    public void ServiceBusDataAdapter_RoundTripWithServiceBusMessage_PreservesData()
+    {
+        // This test validates the round-trip requirement from the issue description
+        
+        // Arrange
+        var serviceProvider = TestServiceProvider.Create();
+        var serializer = serviceProvider.GetRequiredService<Serializer<ServiceBusBatchContainer>>();
+        var dataAdapter = new ServiceBusDataAdapter(serializer);
+        
+        var streamId = StreamId.Create("test-namespace", "my-stream-key");
+        var events = new List<string> { "event1", "event2", "event3" };
+        var requestContext = new Dictionary<string, object> 
+        { 
+            { "user-id", "12345" }, 
+            { "correlation-id", Guid.NewGuid().ToString() } 
+        };
+
+        // Act - Convert to ServiceBusMessage
+        var serviceBusMessage = dataAdapter.ToQueueMessage(streamId, events, null, requestContext);
+
+        // Verify ServiceBusMessage structure
+        Assert.Equal(Headers.ContentType, serviceBusMessage.ContentType);
+        Assert.Equal("test-namespace", serviceBusMessage.ApplicationProperties[Headers.StreamNamespace]);
+        Assert.Equal("my-stream-key", serviceBusMessage.ApplicationProperties[Headers.StreamId]);
+
+        // Act - Convert back to ServiceBusBatchContainer
+        var sequenceId = 98765L;
+        var batchContainer = dataAdapter.FromQueueMessage(serviceBusMessage, sequenceId);
+
+        // Assert - Verify round-trip equality
+        Assert.Equal(streamId, batchContainer.StreamId);
+        Assert.Equal(sequenceId, batchContainer.SequenceToken.SequenceNumber);
+        
+        var recoveredEvents = batchContainer.GetEvents<string>().Select(t => t.Item1).ToList();
+        Assert.Equal(events.Count, recoveredEvents.Count);
+        for (int i = 0; i < events.Count; i++)
+        {
+            Assert.Equal(events[i], recoveredEvents[i]);
+        }
+        
+        // Verify request context was imported correctly
+        Assert.True(batchContainer.ImportRequestContext()); // Should return true since we have context
     }
 
     [Fact]
@@ -117,5 +163,21 @@ public class ServiceBusBatchContainerSerializationTests
 
         // Assert
         Assert.False(imported);
+    }
+}
+
+/// <summary>
+/// Helper class to create a test service provider with the required serialization services.
+/// </summary>
+internal static class TestServiceProvider
+{
+    public static IServiceProvider Create()
+    {
+        var services = new ServiceCollection();
+        
+        // Add Orleans serialization services
+        services.AddSerializer();
+        
+        return services.BuildServiceProvider();
     }
 }

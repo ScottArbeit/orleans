@@ -2,7 +2,17 @@ namespace Orleans.Streaming.AzureServiceBus;
 
 /// <summary>
 /// Constants for Service Bus message header keys used in Orleans streaming.
+/// 
+/// <para>
+/// These header keys are used in Azure Service Bus message application properties to store
+/// Orleans streaming metadata. The headers are stable and documented for compatibility
+/// across versions.
+/// </para>
 /// </summary>
+/// <remarks>
+/// All header constants are prefixed with "orleans-" to avoid conflicts with user-defined
+/// application properties in Service Bus messages.
+/// </remarks>
 public static class Headers
 {
     /// <summary>

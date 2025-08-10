@@ -11,7 +11,27 @@ namespace Orleans.Streaming.AzureServiceBus;
 
 /// <summary>
 /// Azure Service Bus data adapter that converts between Orleans streaming events and Service Bus messages.
+/// 
+/// <para>
+/// This adapter implements the <see cref="IQueueDataAdapter{TQueueMessage, TMessageBatch}"/> interface
+/// to provide serialization and deserialization between Orleans stream events and Azure Service Bus messages.
+/// The adapter uses JSON serialization for the message body and stores stream metadata in Service Bus
+/// message application properties.
+/// </para>
 /// </summary>
+/// <remarks>
+/// <para>
+/// Message structure:
+/// - Body: Serialized <see cref="ServiceBusBatchContainer"/> using Orleans serialization
+/// - ContentType: Set to <see cref="Headers.ContentType"/>
+/// - ApplicationProperties: Contains stream namespace, stream ID, and optional sequence token information
+/// </para>
+/// <para>
+/// This implementation is designed for non-rewindable semantics and does not support offset-based
+/// rewind operations like Event Hubs. Sequence tokens are ephemeral and only valid within the
+/// current processing session.
+/// </para>
+/// </remarks>
 public class ServiceBusDataAdapter : IQueueDataAdapter<ServiceBusMessage, ServiceBusBatchContainer>
 {
     private readonly Serializer<ServiceBusBatchContainer> serializer;
@@ -124,20 +144,13 @@ public class ServiceBusDataAdapter : IQueueDataAdapter<ServiceBusMessage, Servic
     }
 
     /// <summary>
-    /// Extracts the events list from a batch container using reflection.
-    /// This is needed because the events field is private in the deserialized container.
+    /// Extracts the events list from a batch container.
     /// </summary>
     /// <param name="batchContainer">The batch container.</param>
     /// <returns>The list of events.</returns>
     private static List<object> GetEventsFromBatchContainer(ServiceBusBatchContainer batchContainer)
     {
-        // Since we're deserializing our own container, we can use GetEvents to reconstruct the events list
-        var events = new List<object>();
-        foreach (var eventTuple in batchContainer.GetEvents<object>())
-        {
-            events.Add(eventTuple.Item1);
-        }
-        return events;
+        return new List<object>(batchContainer.Events);
     }
 
     /// <summary>
@@ -147,8 +160,6 @@ public class ServiceBusDataAdapter : IQueueDataAdapter<ServiceBusMessage, Servic
     /// <returns>The request context dictionary.</returns>
     private static Dictionary<string, object> GetRequestContextFromBatchContainer(ServiceBusBatchContainer batchContainer)
     {
-        // For now, return an empty dictionary since request context is private
-        // In a full implementation, this would need proper access to the private field
-        return new Dictionary<string, object>();
+        return new Dictionary<string, object>(batchContainer.RequestContext);
     }
 }
