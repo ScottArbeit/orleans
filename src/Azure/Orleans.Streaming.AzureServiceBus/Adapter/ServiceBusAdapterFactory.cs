@@ -142,7 +142,7 @@ internal class ServiceBusStreamDeliveryFailureHandler : IStreamFailureHandler
     /// Gets a value indicating whether the subscription should fault when there is an error.
     /// For Service Bus, we don't fault subscriptions on delivery failures as the message will be retried.
     /// </summary>
-    public bool ShouldFaultSubsriptionOnError => false;
+    public bool ShouldFaultSubscriptionOnError => false;
 
     /// <summary>
     /// Called once all measures to deliver an event to a consumer have been exhausted.
