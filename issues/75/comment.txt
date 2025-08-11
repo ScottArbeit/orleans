@@ -1,0 +1,1 @@
+At the end of working on an issue, the entire solution, including all projects, should be recompiled to ensure that everything builds correctly.
