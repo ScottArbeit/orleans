@@ -1,3 +1,5 @@
+namespace Orleans.Streaming.AzureServiceBus.Tests;
+
 using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -6,8 +8,6 @@ using Orleans.Streaming.AzureServiceBus;
 using Orleans.Streaming.AzureServiceBus.Configuration;
 using Orleans.Streams;
 using Xunit;
-
-namespace Orleans.Streaming.AzureServiceBus.Tests;
 
 /// <summary>
 /// Tests for ServiceBusAdapterFactory integration.

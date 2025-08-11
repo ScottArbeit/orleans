@@ -1,10 +1,10 @@
+namespace Orleans.Streaming.AzureServiceBus.Tests;
+
 using System;
 using System.Linq;
 using Orleans.Streaming.AzureServiceBus;
 using Orleans.Streams;
 using Xunit;
-
-namespace Orleans.Streaming.AzureServiceBus.Tests;
 
 /// <summary>
 /// Tests for ServiceBusEntityNamer utility class.

@@ -1,3 +1,5 @@
+namespace Orleans.Streaming.AzureServiceBus.Tests;
+
 using System;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -6,8 +8,6 @@ using Orleans.Hosting;
 using Orleans.Streaming.AzureServiceBus;
 using Orleans.Streaming.AzureServiceBus.Configuration;
 using Xunit;
-
-namespace Orleans.Streaming.AzureServiceBus.Tests;
 
 /// <summary>
 /// Tests for Service Bus stream configuration and extension methods.

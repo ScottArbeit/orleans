@@ -1,8 +1,8 @@
+namespace Orleans.Streaming.AzureServiceBus.Tests;
+
 using Orleans.Streaming.AzureServiceBus.Tests.Fixtures;
 using Xunit;
 using Xunit.Abstractions;
-
-namespace Orleans.Streaming.AzureServiceBus.Tests;
 
 /// <summary>
 /// Basic tests to verify the Service Bus emulator fixture is working correctly.
