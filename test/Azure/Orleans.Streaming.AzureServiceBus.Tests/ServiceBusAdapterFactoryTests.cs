@@ -4,6 +4,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Orleans.Providers.Streams.Common;
 using Orleans.Streaming.AzureServiceBus;
 using Orleans.Streaming.AzureServiceBus.Configuration;
 using Orleans.Streams;
@@ -121,7 +122,7 @@ public class ServiceBusAdapterFactoryTests
     }
 
     [Fact]
-    public void GetQueueAdapterCache_ThrowsNotImplementedException()
+    public void GetQueueAdapterCache_ReturnsSimpleQueueAdapterCache()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -133,12 +134,16 @@ public class ServiceBusAdapterFactoryTests
         var serviceProvider = services.BuildServiceProvider();
         var factory = ServiceBusAdapterFactory.Create(serviceProvider, "test-provider");
 
-        // Act & Assert
-        Assert.Throws<NotImplementedException>(() => factory.GetQueueAdapterCache());
+        // Act
+        var cache = factory.GetQueueAdapterCache();
+
+        // Assert
+        Assert.NotNull(cache);
+        Assert.IsType<SimpleQueueAdapterCache>(cache);
     }
 
     [Fact]
-    public async Task GetDeliveryFailureHandler_ThrowsNotImplementedException()
+    public async Task GetDeliveryFailureHandler_ReturnsServiceBusStreamDeliveryFailureHandler()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -151,7 +156,37 @@ public class ServiceBusAdapterFactoryTests
         var factory = ServiceBusAdapterFactory.Create(serviceProvider, "test-provider");
         var queueId = QueueId.GetQueueId("test", 0, 0);
 
-        // Act & Assert
-        await Assert.ThrowsAsync<NotImplementedException>(() => factory.GetDeliveryFailureHandler(queueId));
+        // Act
+        var failureHandler = await factory.GetDeliveryFailureHandler(queueId);
+
+        // Assert
+        Assert.NotNull(failureHandler);
+        Assert.False(failureHandler.ShouldFaultSubsriptionOnError);
+    }
+
+    [Fact]
+    public void Cache_IsNonRewindable()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.Configure<ServiceBusStreamOptions>("test-provider", options =>
+        {
+            options.EntityKind = EntityKind.Queue;
+            options.QueueName = "test-queue";
+        });
+        var serviceProvider = services.BuildServiceProvider();
+        var factory = ServiceBusAdapterFactory.Create(serviceProvider, "test-provider");
+
+        // Act
+        var cache = factory.GetQueueAdapterCache();
+        var queueId = QueueId.GetQueueId("test", 0, 0);
+        var queueCache = cache.CreateQueueCache(queueId);
+
+        // Assert
+        Assert.NotNull(queueCache);
+        Assert.IsType<SimpleQueueCache>(queueCache);
+        
+        // SimpleQueueCache is non-rewindable by design - it doesn't support rewind operations
+        // This test confirms that we're using the correct cache type for Service Bus
     }
 }
