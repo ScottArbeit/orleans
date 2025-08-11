@@ -1,3 +1,5 @@
+namespace Orleans.Streaming.AzureServiceBus.Tests;
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,8 +9,6 @@ using Orleans.Runtime;
 using Orleans.Serialization;
 using Orleans.Streaming.AzureServiceBus;
 using Xunit;
-
-namespace Orleans.Streaming.AzureServiceBus.Tests;
 
 /// <summary>
 /// Round-trip serialization tests for Service Bus batch container and data adapter.

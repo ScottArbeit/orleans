@@ -1,9 +1,9 @@
+namespace Orleans.Streaming.AzureServiceBus.Tests;
+
 using System;
 using Microsoft.Extensions.Options;
 using Orleans.Streaming.AzureServiceBus;
 using Xunit;
-
-namespace Orleans.Streaming.AzureServiceBus.Tests;
 
 /// <summary>
 /// Tests for ServiceBusStreamOptions validation.
