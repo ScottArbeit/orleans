@@ -128,6 +128,42 @@ public class ServiceBusDataAdapter : IQueueDataAdapter<ServiceBusMessage, Servic
     }
 
     /// <summary>
+    /// Creates a batch container from a Service Bus received message.
+    /// </summary>
+    /// <param name="receivedMessage">The Service Bus received message.</param>
+    /// <param name="sequenceId">The sequence identifier for creating ephemeral tokens.</param>
+    /// <returns>A batch container with the deserialized events.</returns>
+    public ServiceBusBatchContainer FromQueueMessage(ServiceBusReceivedMessage receivedMessage, long sequenceId)
+    {
+        ArgumentNullException.ThrowIfNull(receivedMessage);
+
+        // Deserialize the batch container from the message body
+        var messageBody = receivedMessage.Body.ToArray();
+        var batchContainer = serializer.Deserialize(messageBody);
+
+        // Extract stream metadata from application properties
+        var streamNamespace = GetApplicationProperty<string>(receivedMessage, Headers.StreamNamespace);
+        var streamKey = GetApplicationProperty<string>(receivedMessage, Headers.StreamId);
+        
+        if (streamNamespace is null || streamKey is null)
+        {
+            throw new InvalidOperationException(
+                $"Service Bus message is missing required stream metadata. " +
+                $"Expected properties: {Headers.StreamNamespace}, {Headers.StreamId}");
+        }
+
+        // Reconstruct the stream ID
+        var streamId = StreamId.Create(streamNamespace, streamKey);
+
+        // Create a new batch container with the ephemeral sequence token
+        return ServiceBusBatchContainer.CreateWithSequenceId(
+            streamId, 
+            GetEventsFromBatchContainer(batchContainer), 
+            GetRequestContextFromBatchContainer(batchContainer),
+            sequenceId);
+    }
+
+    /// <summary>
     /// Gets an application property value from a Service Bus message.
     /// </summary>
     /// <typeparam name="T">The expected type of the property value.</typeparam>
@@ -137,6 +173,22 @@ public class ServiceBusDataAdapter : IQueueDataAdapter<ServiceBusMessage, Servic
     private static T? GetApplicationProperty<T>(ServiceBusMessage message, string propertyKey)
     {
         if (message.ApplicationProperties.TryGetValue(propertyKey, out var value) && value is T typedValue)
+        {
+            return typedValue;
+        }
+        return default(T);
+    }
+
+    /// <summary>
+    /// Gets an application property value from a Service Bus received message.
+    /// </summary>
+    /// <typeparam name="T">The expected type of the property value.</typeparam>
+    /// <param name="receivedMessage">The Service Bus received message.</param>
+    /// <param name="propertyKey">The property key.</param>
+    /// <returns>The property value, or default(T) if not found.</returns>
+    private static T? GetApplicationProperty<T>(ServiceBusReceivedMessage receivedMessage, string propertyKey)
+    {
+        if (receivedMessage.ApplicationProperties.TryGetValue(propertyKey, out var value) && value is T typedValue)
         {
             return typedValue;
         }
