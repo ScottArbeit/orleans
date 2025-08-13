@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Orleans.Providers.Streams.Common;
+using Orleans.Serialization;
 using Orleans.Streaming.AzureServiceBus;
 using Orleans.Streaming.AzureServiceBus.Configuration;
 using Orleans.Streams;
@@ -105,7 +106,7 @@ public class ServiceBusAdapterFactoryTests
     }
 
     [Fact]
-    public async Task CreateAdapter_ThrowsNotImplementedException()
+    public async Task CreateAdapter_ValidConfiguration_CreatesServiceBusAdapter()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -113,12 +114,30 @@ public class ServiceBusAdapterFactoryTests
         {
             options.EntityKind = EntityKind.Queue;
             options.QueueName = "test-queue";
+            options.ConnectionString = "Endpoint=sb://localhost:5672/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;";
         });
+        
+        // Add Orleans serialization services
+        services.AddSerializer();
+        
         var serviceProvider = services.BuildServiceProvider();
         var factory = ServiceBusAdapterFactory.Create(serviceProvider, "test-provider");
 
-        // Act & Assert
-        await Assert.ThrowsAsync<NotImplementedException>(() => factory.CreateAdapter());
+        // Act
+        var adapter = await factory.CreateAdapter();
+
+        // Assert
+        Assert.NotNull(adapter);
+        Assert.IsType<ServiceBusAdapter>(adapter);
+        Assert.Equal("test-provider", adapter.Name);
+        Assert.Equal(StreamProviderDirection.WriteOnly, adapter.Direction);
+        Assert.False(adapter.IsRewindable);
+        
+        // Cleanup
+        if (adapter is IDisposable disposable)
+        {
+            disposable.Dispose();
+        }
     }
 
     [Fact]

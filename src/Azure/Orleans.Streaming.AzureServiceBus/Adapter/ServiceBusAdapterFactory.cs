@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Orleans.Configuration;
 using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
+using Orleans.Serialization;
 using Orleans.Streams;
 
 namespace Orleans.Streaming.AzureServiceBus;
@@ -64,13 +65,27 @@ internal class ServiceBusQueueAdapterFactory : IQueueAdapterFactory
     public QueueId QueueId => _queueMapper.QueueId;
 
     /// <summary>
-    /// Creates a queue adapter. (Not implemented in this step)
+    /// Creates a queue adapter for Service Bus streaming.
     /// </summary>
     /// <returns>The queue adapter</returns>
     public Task<IQueueAdapter> CreateAdapter()
     {
-        // Will be implemented in later steps
-        throw new NotImplementedException("Service Bus adapter will be implemented in a later step");
+        // Get the Service Bus stream options
+        var optionsMonitor = _services.GetRequiredService<IOptionsMonitor<ServiceBusStreamOptions>>();
+        var options = optionsMonitor.Get(_providerName);
+
+        // Get the data adapter from DI or create one
+        var serializer = _services.GetRequiredService<Serializer<ServiceBusBatchContainer>>();
+        var dataAdapter = new ServiceBusDataAdapter(serializer);
+
+        // Get logger
+        var logger = _services.GetService<ILogger<ServiceBusAdapter>>() ?? 
+                    Microsoft.Extensions.Logging.Abstractions.NullLogger<ServiceBusAdapter>.Instance;
+
+        // Create the adapter
+        var adapter = new ServiceBusAdapter(_providerName, options, dataAdapter, _queueMapper, logger);
+
+        return Task.FromResult<IQueueAdapter>(adapter);
     }
 
     /// <summary>
@@ -142,7 +157,7 @@ internal class ServiceBusStreamDeliveryFailureHandler : IStreamFailureHandler
     /// Gets a value indicating whether the subscription should fault when there is an error.
     /// For Service Bus, we don't fault subscriptions on delivery failures as the message will be retried.
     /// </summary>
-    public bool ShouldFaultSubscriptionOnError => false;
+    public bool ShouldFaultSubsriptionOnError => false;
 
     /// <summary>
     /// Called once all measures to deliver an event to a consumer have been exhausted.
