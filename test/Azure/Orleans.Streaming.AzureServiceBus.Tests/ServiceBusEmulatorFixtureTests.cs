@@ -7,7 +7,8 @@ using Xunit.Abstractions;
 /// <summary>
 /// Basic tests to verify the Service Bus emulator fixture is working correctly.
 /// </summary>
-public class ServiceBusEmulatorFixtureTests : IClassFixture<ServiceBusEmulatorFixture>
+[Collection(ServiceBusEmulatorCollection.CollectionName)]
+public class ServiceBusEmulatorFixtureTests
 {
     private readonly ServiceBusEmulatorFixture _fixture;
     private readonly ITestOutputHelper _output;
@@ -63,6 +64,14 @@ public class ServiceBusEmulatorFixtureTests : IClassFixture<ServiceBusEmulatorFi
         await using var client = _fixture.CreateServiceBusClient();
         await using var sender = client.CreateSender(ServiceBusEmulatorFixture.QueueName);
         await using var receiver = client.CreateReceiver(ServiceBusEmulatorFixture.QueueName);
+
+        // Drain any existing messages from previous tests
+        while (true)
+        {
+            var existingMessage = await receiver.ReceiveMessageAsync(TimeSpan.FromMilliseconds(100));
+            if (existingMessage is null) break;
+            await receiver.CompleteMessageAsync(existingMessage);
+        }
 
         // Send a test message
         var message = new Azure.Messaging.ServiceBus.ServiceBusMessage("Hello from emulator with SQL Server!");

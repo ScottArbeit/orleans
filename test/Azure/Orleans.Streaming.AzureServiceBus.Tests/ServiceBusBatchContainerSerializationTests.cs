@@ -3,18 +3,27 @@ namespace Orleans.Streaming.AzureServiceBus.Tests;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
 using Microsoft.Extensions.DependencyInjection;
 using Orleans.Runtime;
 using Orleans.Serialization;
 using Orleans.Streaming.AzureServiceBus;
+using Orleans.Streaming.AzureServiceBus.Tests.Fixtures;
 using Xunit;
 
 /// <summary>
 /// Round-trip serialization tests for Service Bus batch container and data adapter.
 /// </summary>
+[Collection(ServiceBusEmulatorCollection.CollectionName)]
 public class ServiceBusBatchContainerSerializationTests
 {
+    private readonly ServiceBusEmulatorFixture _fixture;
+
+    public ServiceBusBatchContainerSerializationTests(ServiceBusEmulatorFixture fixture)
+    {
+        _fixture = fixture;
+    }
     [Fact]
     public void ServiceBusBatchContainer_BasicCreation_Succeeds()
     {
@@ -32,16 +41,18 @@ public class ServiceBusBatchContainerSerializationTests
     }
 
     [Fact]
-    public void ServiceBusDataAdapter_RoundTripWithServiceBusMessage_PreservesData()
+    public async Task ServiceBusDataAdapter_RoundTripWithServiceBusMessage_PreservesData()
     {
         // This test validates the round-trip requirement from the issue description
+        // Now enhanced to test end-to-end with real Service Bus emulator
         
         // Arrange
         var serviceProvider = TestServiceProvider.Create();
         var serializer = serviceProvider.GetRequiredService<Serializer<ServiceBusBatchContainer>>();
         var dataAdapter = new ServiceBusDataAdapter(serializer);
         
-        var streamId = StreamId.Create("test-namespace", "my-stream-key");
+        var uniqueKey = $"serialization-test-{Guid.NewGuid():N}";
+        var streamId = StreamId.Create("test-namespace", uniqueKey);
         var events = new List<string> { "event1", "event2", "event3" };
         var requestContext = new Dictionary<string, object> 
         { 
@@ -49,19 +60,50 @@ public class ServiceBusBatchContainerSerializationTests
             { "correlation-id", Guid.NewGuid().ToString() } 
         };
 
-        // Act - Convert to ServiceBusMessage
+        // Act - Convert to ServiceBusMessage and send through real Service Bus
         var serviceBusMessage = dataAdapter.ToQueueMessage(streamId, events, null, requestContext);
 
         // Verify ServiceBusMessage structure
         Assert.Equal(Headers.ContentType, serviceBusMessage.ContentType);
         Assert.Equal("test-namespace", serviceBusMessage.ApplicationProperties[Headers.StreamNamespace]);
-        Assert.Equal("my-stream-key", serviceBusMessage.ApplicationProperties[Headers.StreamId]);
+        Assert.Equal(uniqueKey, serviceBusMessage.ApplicationProperties[Headers.StreamId]);
 
-        // Act - Convert back to ServiceBusBatchContainer
+        // Send and receive the message through real Service Bus emulator
+        await using var client = _fixture.CreateServiceBusClient();
+        await using var sender = client.CreateSender(ServiceBusEmulatorFixture.QueueName);
+        await using var receiver = client.CreateReceiver(ServiceBusEmulatorFixture.QueueName);
+
+        // Send the message through Service Bus
+        await sender.SendMessageAsync(serviceBusMessage);
+
+        // Receive the message back from Service Bus
+        var receivedMessage = await receiver.ReceiveMessageAsync(TimeSpan.FromSeconds(5));
+        Assert.NotNull(receivedMessage);
+
+        // Convert ServiceBusReceivedMessage to ServiceBusMessage for data adapter
+        var recoveredServiceBusMessage = new ServiceBusMessage(receivedMessage.Body)
+        {
+            ContentType = receivedMessage.ContentType,
+            CorrelationId = receivedMessage.CorrelationId,
+            MessageId = receivedMessage.MessageId,
+            Subject = receivedMessage.Subject,
+            ReplyTo = receivedMessage.ReplyTo,
+            ReplyToSessionId = receivedMessage.ReplyToSessionId,
+            SessionId = receivedMessage.SessionId,
+            TimeToLive = receivedMessage.TimeToLive,
+        };
+
+        // Copy application properties
+        foreach (var property in receivedMessage.ApplicationProperties)
+        {
+            recoveredServiceBusMessage.ApplicationProperties[property.Key] = property.Value;
+        }
+
+        // Act - Convert back to ServiceBusBatchContainer from real Service Bus message
         var sequenceId = 98765L;
-        var batchContainer = dataAdapter.FromQueueMessage(serviceBusMessage, sequenceId);
+        var batchContainer = dataAdapter.FromQueueMessage(recoveredServiceBusMessage, sequenceId);
 
-        // Assert - Verify round-trip equality
+        // Assert - Verify round-trip equality after real Service Bus transport
         Assert.Equal(streamId, batchContainer.StreamId);
         Assert.Equal(sequenceId, batchContainer.SequenceToken.SequenceNumber);
         
@@ -74,6 +116,9 @@ public class ServiceBusBatchContainerSerializationTests
         
         // Verify request context was imported correctly
         Assert.True(batchContainer.ImportRequestContext()); // Should return true since we have context
+
+        // Complete the message to clean up
+        await receiver.CompleteMessageAsync(receivedMessage);
     }
 
     [Fact]

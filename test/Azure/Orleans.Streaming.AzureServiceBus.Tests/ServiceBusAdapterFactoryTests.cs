@@ -1,6 +1,7 @@
 namespace Orleans.Streaming.AzureServiceBus.Tests;
 
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -8,14 +9,22 @@ using Orleans.Providers.Streams.Common;
 using Orleans.Serialization;
 using Orleans.Streaming.AzureServiceBus;
 using Orleans.Streaming.AzureServiceBus.Configuration;
+using Orleans.Streaming.AzureServiceBus.Tests.Fixtures;
 using Orleans.Streams;
 using Xunit;
 
 /// <summary>
 /// Tests for ServiceBusAdapterFactory integration.
 /// </summary>
+[Collection(ServiceBusEmulatorCollection.CollectionName)]
 public class ServiceBusAdapterFactoryTests
 {
+    private readonly ServiceBusEmulatorFixture _fixture;
+
+    public ServiceBusAdapterFactoryTests(ServiceBusEmulatorFixture fixture)
+    {
+        _fixture = fixture;
+    }
     [Fact]
     public void Create_ValidQueueConfiguration_CreatesFactoryWithCorrectQueueId()
     {
@@ -113,8 +122,8 @@ public class ServiceBusAdapterFactoryTests
         services.Configure<ServiceBusStreamOptions>("test-provider", options =>
         {
             options.EntityKind = EntityKind.Queue;
-            options.QueueName = "test-queue";
-            options.ConnectionString = "Endpoint=sb://localhost:5672/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;";
+            options.QueueName = ServiceBusEmulatorFixture.QueueName;
+            options.ConnectionString = _fixture.ServiceBusConnectionString;
         });
         
         // Add Orleans serialization services
@@ -132,6 +141,26 @@ public class ServiceBusAdapterFactoryTests
         Assert.Equal("test-provider", adapter.Name);
         Assert.Equal(StreamProviderDirection.WriteOnly, adapter.Direction);
         Assert.False(adapter.IsRewindable);
+        
+        // Verify the adapter can actually send a message through the emulator
+        var uniqueKey = $"factory-test-{Guid.NewGuid():N}";
+        var streamId = StreamId.Create("test-namespace", uniqueKey);
+        var events = new[] { "test-event" };
+        var requestContext = new Dictionary<string, object>();
+
+        // This should complete without error, confirming real Service Bus connectivity
+        await adapter.QueueMessageBatchAsync(streamId, events, null, requestContext);
+        
+        // Clean up: drain the message we sent
+        await using var client = _fixture.CreateServiceBusClient();
+        await using var receiver = client.CreateReceiver(ServiceBusEmulatorFixture.QueueName);
+        
+        while (true)
+        {
+            var message = await receiver.ReceiveMessageAsync(TimeSpan.FromMilliseconds(100));
+            if (message is null) break;
+            await receiver.CompleteMessageAsync(message);
+        }
         
         // Cleanup
         if (adapter is IDisposable disposable)
