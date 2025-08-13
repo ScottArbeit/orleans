@@ -2,9 +2,11 @@ namespace Orleans.Streaming.AzureServiceBus.Tests;
 
 using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Orleans.Runtime;
+using Orleans.Serialization;
 using Orleans.Streaming.AzureServiceBus.Tests.Fixtures;
 using Orleans.Streams;
 using Xunit;
@@ -26,16 +28,15 @@ public class ServiceBusAdapterReceiverTests
     }
 
     [Fact]
-    public void ServiceBusAdapterReceiver_Can_Be_Created()
+    public void ServiceBusAdapterReceiver_Constructor_RequiresDataAdapter()
     {
         // Arrange
         var queueId = QueueId.GetQueueId("test", 0, 1);
         var options = CreateServiceBusStreamOptions();
         var logger = NullLogger<ServiceBusAdapterReceiver>.Instance;
 
-        // Act & Assert - Creating with null data adapter should not throw (constructor doesn't validate)
-        var exception = Record.Exception(() => new ServiceBusAdapterReceiver(queueId, options, null!, logger));
-        Assert.Null(exception);
+        // Act & Assert - Creating with null data adapter should throw
+        Assert.Throws<ArgumentNullException>(() => new ServiceBusAdapterReceiver(queueId, options, null!, logger));
     }
 
     [Fact]
@@ -46,7 +47,7 @@ public class ServiceBusAdapterReceiverTests
         var options = CreateServiceBusStreamOptions();
         var logger = NullLogger<ServiceBusAdapterReceiver>.Instance;
 
-        using var receiver = new ServiceBusAdapterReceiver(queueId, options, null!, logger);
+        using var receiver = new ServiceBusAdapterReceiver(queueId, options, CreateDataAdapter(), logger);
 
         // Act - Shutdown before getting messages
         await receiver.Shutdown(TimeSpan.FromSeconds(30));
@@ -65,7 +66,7 @@ public class ServiceBusAdapterReceiverTests
         var options = CreateServiceBusStreamOptions();
         var logger = NullLogger<ServiceBusAdapterReceiver>.Instance;
 
-        using var receiver = new ServiceBusAdapterReceiver(queueId, options, null!, logger);
+        using var receiver = new ServiceBusAdapterReceiver(queueId, options, CreateDataAdapter(), logger);
 
         // Act & Assert - Should not throw on empty list
         await receiver.MessagesDeliveredAsync(Array.Empty<IBatchContainer>());
@@ -85,5 +86,14 @@ public class ServiceBusAdapterReceiverTests
                 LockAutoRenew = false // Disable for tests to avoid complexity
             }
         };
+    }
+
+    private static ServiceBusDataAdapter CreateDataAdapter()
+    {
+        var services = new ServiceCollection();
+        services.AddSerializer();
+        var serviceProvider = services.BuildServiceProvider();
+        var serializer = serviceProvider.GetRequiredService<Serializer<ServiceBusBatchContainer>>();
+        return new ServiceBusDataAdapter(serializer);
     }
 }

@@ -38,7 +38,7 @@ public class ServiceBusAdapterTests
         // Assert
         Assert.NotNull(adapter);
         Assert.Equal("test-provider", adapter.Name);
-        Assert.Equal(StreamProviderDirection.WriteOnly, adapter.Direction);
+        Assert.Equal(StreamProviderDirection.ReadWrite, adapter.Direction);
         Assert.False(adapter.IsRewindable);
         
         // Cleanup
@@ -176,7 +176,7 @@ public class ServiceBusAdapterTests
     }
 
     [Fact]
-    public void CreateReceiver_NotImplemented_ThrowsNotImplementedException()
+    public void CreateReceiver_ValidParameters_CreatesReceiver()
     {
         // Arrange
         var options = CreateValidOptions();
@@ -187,8 +187,18 @@ public class ServiceBusAdapterTests
         using var adapter = new ServiceBusAdapter("test-provider", options, dataAdapter, queueMapper, logger);
         var queueId = QueueId.GetQueueId("test", 0, 0);
 
-        // Act & Assert
-        Assert.Throws<NotImplementedException>(() => adapter.CreateReceiver(queueId));
+        // Act
+        var receiver = adapter.CreateReceiver(queueId);
+
+        // Assert
+        Assert.NotNull(receiver);
+        Assert.IsType<ServiceBusAdapterReceiver>(receiver);
+        
+        // Cleanup - Cast to ServiceBusAdapterReceiver to access Dispose
+        if (receiver is ServiceBusAdapterReceiver disposableReceiver)
+        {
+            disposableReceiver.Dispose();
+        }
     }
 
     [Fact]
