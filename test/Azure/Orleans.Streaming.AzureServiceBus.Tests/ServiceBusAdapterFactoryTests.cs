@@ -139,7 +139,7 @@ public class ServiceBusAdapterFactoryTests
         Assert.NotNull(adapter);
         Assert.IsType<ServiceBusAdapter>(adapter);
         Assert.Equal("test-provider", adapter.Name);
-        Assert.Equal(StreamProviderDirection.WriteOnly, adapter.Direction);
+        Assert.Equal(StreamProviderDirection.ReadWrite, adapter.Direction);
         Assert.False(adapter.IsRewindable);
         
         // Verify the adapter can actually send a message through the emulator

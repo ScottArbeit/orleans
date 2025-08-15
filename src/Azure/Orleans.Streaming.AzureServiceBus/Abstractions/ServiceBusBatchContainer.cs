@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Serialization;
 using Orleans.Providers.Streams.Common;
 using Orleans.Runtime;
+using Orleans.Serialization;
 using Orleans.Streams;
 
 namespace Orleans.Streaming.AzureServiceBus;
@@ -40,6 +42,11 @@ public class ServiceBusBatchContainer : IBatchContainer
     /// </summary>
     [Id(3)]
     public StreamId StreamId { get; private set; }
+
+    [NonSerialized]
+    // Need to store reference to the original Service Bus received message to be able to complete/abandon it later.
+    // Don't need to serialize it, since we are never interested in sending it to stream consumers.
+    internal ServiceBusAdapterReceiver.ReceivedMessage? ReceivedMessage;
 
     /// <summary>
     /// Gets the sequence token for this batch.

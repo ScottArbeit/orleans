@@ -77,9 +77,9 @@ internal class ServiceBusAdapter : IQueueAdapter, IDisposable
     public string Name => _providerName;
 
     /// <summary>
-    /// Gets the stream direction supported by the adapter. Service Bus supports only writing in this implementation.
+    /// Gets the stream direction supported by the adapter. Service Bus supports both reading and writing.
     /// </summary>
-    public StreamProviderDirection Direction => StreamProviderDirection.WriteOnly;
+    public StreamProviderDirection Direction => StreamProviderDirection.ReadWrite;
 
     /// <summary>
     /// Gets a value indicating whether this is a rewindable stream adapter.
@@ -149,14 +149,19 @@ internal class ServiceBusAdapter : IQueueAdapter, IDisposable
     }
 
     /// <summary>
-    /// Creates a queue receiver. Not implemented for write-only adapter.
+    /// Creates a queue receiver for Service Bus streaming.
     /// </summary>
     /// <param name="queueId">The queue identifier.</param>
-    /// <returns>Not implemented.</returns>
-    /// <exception cref="NotImplementedException">This adapter is write-only.</exception>
+    /// <returns>A configured Service Bus adapter receiver.</returns>
     public IQueueAdapterReceiver CreateReceiver(QueueId queueId)
     {
-        throw new NotImplementedException("ServiceBus adapter in this step is write-only. Receiver will be implemented in later steps.");
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(nameof(ServiceBusAdapter));
+        }
+
+        var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<ServiceBusAdapterReceiver>.Instance;
+        return new ServiceBusAdapterReceiver(queueId, _options, _dataAdapter, logger);
     }
 
     /// <summary>
