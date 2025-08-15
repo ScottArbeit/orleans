@@ -25,6 +25,7 @@ internal class ServiceBusAdapter : IQueueAdapter, IDisposable
     private readonly ILogger<ServiceBusAdapter> _logger;
     private readonly ServiceBusClient _serviceBusClient;
     private readonly ServiceBusSender _serviceBusSender;
+    private readonly ServiceBusStreamFailureHandler? _failureHandler;
     private bool _disposed;
 
     /// <summary>
@@ -35,6 +36,7 @@ internal class ServiceBusAdapter : IQueueAdapter, IDisposable
     /// <param name="dataAdapter">The data adapter for message conversion.</param>
     /// <param name="queueMapper">The queue mapper.</param>
     /// <param name="logger">The logger.</param>
+    /// <param name="failureHandler">Optional failure handler for tracking delivery failures.</param>
     /// <exception cref="ArgumentNullException">Thrown when any required parameter is null.</exception>
     /// <exception cref="ArgumentException">Thrown when providerName is null or whitespace.</exception>
     public ServiceBusAdapter(
@@ -42,7 +44,8 @@ internal class ServiceBusAdapter : IQueueAdapter, IDisposable
         ServiceBusStreamOptions options,
         ServiceBusDataAdapter dataAdapter,
         ServiceBusQueueMapper queueMapper,
-        ILogger<ServiceBusAdapter> logger)
+        ILogger<ServiceBusAdapter> logger,
+        ServiceBusStreamFailureHandler? failureHandler = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(providerName);
         ArgumentNullException.ThrowIfNull(options);
@@ -55,6 +58,7 @@ internal class ServiceBusAdapter : IQueueAdapter, IDisposable
         _dataAdapter = dataAdapter;
         _queueMapper = queueMapper;
         _logger = logger;
+        _failureHandler = failureHandler;
 
         // Create Service Bus client
         _serviceBusClient = CreateServiceBusClient(options);
@@ -161,7 +165,7 @@ internal class ServiceBusAdapter : IQueueAdapter, IDisposable
         }
 
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<ServiceBusAdapterReceiver>.Instance;
-        return new ServiceBusAdapterReceiver(queueId, _options, _dataAdapter, logger);
+        return new ServiceBusAdapterReceiver(queueId, _options, _dataAdapter, logger, _failureHandler);
     }
 
     /// <summary>

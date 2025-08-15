@@ -82,8 +82,11 @@ internal class ServiceBusQueueAdapterFactory : IQueueAdapterFactory
         var logger = _services.GetService<ILogger<ServiceBusAdapter>>() ?? 
                     Microsoft.Extensions.Logging.Abstractions.NullLogger<ServiceBusAdapter>.Instance;
 
+        // Get the failure handler if it's our custom one
+        var failureHandler = _streamFailureHandler as ServiceBusStreamFailureHandler;
+
         // Create the adapter
-        var adapter = new ServiceBusAdapter(_providerName, options, dataAdapter, _queueMapper, logger);
+        var adapter = new ServiceBusAdapter(_providerName, options, dataAdapter, _queueMapper, logger, failureHandler);
 
         return Task.FromResult<IQueueAdapter>(adapter);
     }
@@ -119,7 +122,8 @@ internal class ServiceBusQueueAdapterFactory : IQueueAdapterFactory
 
     /// <summary>
     /// Acquire delivery failure handler for a queue.
-    /// Returns a default handler that logs failures and allows Service Bus to handle retries and dead letter queuing.
+    /// Returns the Service Bus stream failure handler that logs failures and prevents completion
+    /// of failed messages to allow Service Bus retries and dead letter queue handling.
     /// </summary>
     /// <param name="queueId">The queue identifier.</param>
     /// <returns>The stream failure handler.</returns>
@@ -129,79 +133,10 @@ internal class ServiceBusQueueAdapterFactory : IQueueAdapterFactory
         {
             // Lazy initialize the failure handler
             var loggerFactory = _services.GetService<ILoggerFactory>() ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance;
-            _streamFailureHandler = new ServiceBusStreamDeliveryFailureHandler(loggerFactory.CreateLogger<ServiceBusStreamDeliveryFailureHandler>());
+            var logger = loggerFactory.CreateLogger<ServiceBusStreamFailureHandler>();
+            _streamFailureHandler = new ServiceBusStreamFailureHandler(logger);
         }
         
         return Task.FromResult(_streamFailureHandler);
-    }
-}
-
-/// <summary>
-/// Default stream failure handler for Service Bus that logs delivery failures
-/// and lets Service Bus handle retries and eventual dead letter queuing.
-/// </summary>
-internal class ServiceBusStreamDeliveryFailureHandler : IStreamFailureHandler
-{
-    private readonly ILogger<ServiceBusStreamDeliveryFailureHandler> _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="ServiceBusStreamDeliveryFailureHandler"/> class.
-    /// </summary>
-    /// <param name="logger">The logger.</param>
-    public ServiceBusStreamDeliveryFailureHandler(ILogger<ServiceBusStreamDeliveryFailureHandler> logger)
-    {
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    }
-
-    /// <summary>
-    /// Gets a value indicating whether the subscription should fault when there is an error.
-    /// For Service Bus, we don't fault subscriptions on delivery failures as the message will be retried.
-    /// </summary>
-    public bool ShouldFaultSubsriptionOnError => false;
-
-    /// <summary>
-    /// Called once all measures to deliver an event to a consumer have been exhausted.
-    /// Logs the failure and lets Service Bus handle retry logic and eventual dead letter queue routing.
-    /// </summary>
-    /// <param name="subscriptionId">The subscription identifier.</param>
-    /// <param name="streamProviderName">Name of the stream provider.</param>
-    /// <param name="streamIdentity">The stream identity.</param>
-    /// <param name="sequenceToken">The sequence token.</param>
-    /// <returns>A <see cref="Task"/> representing the operation.</returns>
-    public Task OnDeliveryFailure(GuidId subscriptionId, string streamProviderName, StreamId streamIdentity, StreamSequenceToken sequenceToken)
-    {
-        _logger.LogWarning(
-            "Stream delivery failure for subscription {SubscriptionId} on provider {StreamProviderName}, " +
-            "stream {StreamNamespace}:{StreamKey}, sequence token {SequenceToken}. " +
-            "Message will be retried by Service Bus and eventually moved to dead letter queue if max delivery count is exceeded.",
-            subscriptionId,
-            streamProviderName,
-            streamIdentity.GetNamespace(),
-            streamIdentity.GetKeyAsString(),
-            sequenceToken);
-
-        return Task.CompletedTask;
-    }
-
-    /// <summary>
-    /// Should be called when establishing a subscription failed.
-    /// </summary>
-    /// <param name="subscriptionId">The subscription identifier.</param>
-    /// <param name="streamProviderName">Name of the stream provider.</param>
-    /// <param name="streamIdentity">The stream identity.</param>
-    /// <param name="sequenceToken">The sequence token.</param>
-    /// <returns>A <see cref="Task"/> representing the operation.</returns>
-    public Task OnSubscriptionFailure(GuidId subscriptionId, string streamProviderName, StreamId streamIdentity, StreamSequenceToken sequenceToken)
-    {
-        _logger.LogError(
-            "Stream subscription failure for subscription {SubscriptionId} on provider {StreamProviderName}, " +
-            "stream {StreamNamespace}:{StreamKey}, sequence token {SequenceToken}.",
-            subscriptionId,
-            streamProviderName,
-            streamIdentity.GetNamespace(),
-            streamIdentity.GetKeyAsString(),
-            sequenceToken);
-
-        return Task.CompletedTask;
     }
 }
