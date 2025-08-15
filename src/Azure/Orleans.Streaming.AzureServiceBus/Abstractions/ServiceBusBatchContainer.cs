@@ -48,6 +48,10 @@ public class ServiceBusBatchContainer : IBatchContainer
     // Don't need to serialize it, since we are never interested in sending it to stream consumers.
     internal ServiceBusAdapterReceiver.ReceivedMessage? ReceivedMessage;
 
+    [NonSerialized]
+    // Track delivery status to determine whether to complete or abandon the message
+    internal bool DeliveryFailed;
+
     /// <summary>
     /// Gets the sequence token for this batch.
     /// This is an ephemeral, non-rewindable token that only tracks queue-local monotonic position.
@@ -160,6 +164,24 @@ public class ServiceBusBatchContainer : IBatchContainer
     {
         var sequenceToken = new EventSequenceTokenV2(sequenceId);
         return new ServiceBusBatchContainer(streamId, events, requestContext, sequenceToken);
+    }
+
+    /// <summary>
+    /// Gets the Service Bus MessageId if available.
+    /// </summary>
+    /// <returns>The MessageId or null if not available.</returns>
+    internal string? GetServiceBusMessageId()
+    {
+        return ReceivedMessage?.ServiceBusReceivedMessage.MessageId;
+    }
+
+    /// <summary>
+    /// Marks this batch as having failed delivery to consumers.
+    /// This prevents the message from being completed, allowing Service Bus to handle retries.
+    /// </summary>
+    internal void MarkDeliveryFailed()
+    {
+        DeliveryFailed = true;
     }
 
     /// <inheritdoc/>

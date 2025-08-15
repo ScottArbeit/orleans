@@ -22,6 +22,7 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
     private readonly ServiceBusDataAdapter _dataAdapter;
     private readonly ILogger<ServiceBusAdapterReceiver> _logger;
     private readonly ServiceBusClient _serviceBusClient;
+    private readonly ServiceBusStreamFailureHandler? _failureHandler;
     private ServiceBusReceiver? _serviceBusReceiver;
     private readonly ConcurrentQueue<ReceivedMessage> _messageQueue;
     private readonly CancellationTokenSource _cancellationTokenSource;
@@ -37,16 +38,19 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
     /// <param name="options">The Service Bus streaming options.</param>
     /// <param name="dataAdapter">The data adapter for message conversion.</param>
     /// <param name="logger">The logger.</param>
+    /// <param name="failureHandler">Optional failure handler for tracking delivery failures.</param>
     public ServiceBusAdapterReceiver(
         QueueId queueId,
         ServiceBusStreamOptions options,
         ServiceBusDataAdapter dataAdapter,
-        ILogger<ServiceBusAdapterReceiver> logger)
+        ILogger<ServiceBusAdapterReceiver> logger,
+        ServiceBusStreamFailureHandler? failureHandler = null)
     {
         _queueId = queueId;
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _dataAdapter = dataAdapter ?? throw new ArgumentNullException(nameof(dataAdapter));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _failureHandler = failureHandler;
 
         _serviceBusClient = CreateServiceBusClient(options);
         _messageQueue = new ConcurrentQueue<ReceivedMessage>();
@@ -172,6 +176,7 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
     /// <summary>
     /// Notifies the receiver that messages were delivered successfully, so they can be completed.
     /// On failure, messages will be abandoned for redelivery.
+    /// Messages marked as having delivery failures will be abandoned to allow Service Bus retries and DLQ handling.
     /// </summary>
     /// <param name="messages">The message batches that were delivered.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
@@ -193,38 +198,72 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
             {
                 var receivedMessage = serviceBusContainer.ReceivedMessage;
                 
-                tasks.Add(Task.Run(async () =>
+                // Check if delivery failed using the failure handler, or fallback to batch container flag
+                var deliveryFailed = (_failureHandler?.IsTokenFailed(serviceBusContainer.SequenceToken) == true) || 
+                                   serviceBusContainer.DeliveryFailed;
+                                   
+                if (deliveryFailed)
                 {
-                    try
+                    tasks.Add(Task.Run(async () =>
                     {
-                        await _serviceBusReceiver.CompleteMessageAsync(receivedMessage.ServiceBusReceivedMessage);
-                        Interlocked.Increment(ref completedCount);
-                        
-                        _logger.LogTrace(
-                            "Completed Service Bus message {MessageId} for stream {StreamNamespace}:{StreamKey}",
-                            receivedMessage.ServiceBusReceivedMessage.MessageId,
-                            serviceBusContainer.StreamId.GetNamespace(),
-                            serviceBusContainer.StreamId.GetKeyAsString());
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex,
-                            "Failed to complete Service Bus message {MessageId}, abandoning for redelivery",
-                            receivedMessage.ServiceBusReceivedMessage.MessageId);
-
                         try
                         {
                             await _serviceBusReceiver.AbandonMessageAsync(receivedMessage.ServiceBusReceivedMessage);
                             Interlocked.Increment(ref abandonedCount);
+                            
+                            // Clear the failed token from tracking
+                            _failureHandler?.ClearFailedToken(serviceBusContainer.SequenceToken);
+                            
+                            _logger.LogDebug(
+                                "Abandoned Service Bus message {MessageId} for stream {StreamNamespace}:{StreamKey} due to delivery failure",
+                                receivedMessage.ServiceBusReceivedMessage.MessageId,
+                                serviceBusContainer.StreamId.GetNamespace(),
+                                serviceBusContainer.StreamId.GetKeyAsString());
                         }
-                        catch (Exception abandonEx)
+                        catch (Exception ex)
                         {
-                            _logger.LogError(abandonEx,
-                                "Failed to abandon Service Bus message {MessageId} after completion failure",
+                            _logger.LogWarning(ex,
+                                "Failed to abandon Service Bus message {MessageId} after delivery failure",
                                 receivedMessage.ServiceBusReceivedMessage.MessageId);
                         }
-                    }
-                }));
+                    }));
+                }
+                else
+                {
+                    // Delivery succeeded, complete the message
+                    tasks.Add(Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await _serviceBusReceiver.CompleteMessageAsync(receivedMessage.ServiceBusReceivedMessage);
+                            Interlocked.Increment(ref completedCount);
+                            
+                            _logger.LogTrace(
+                                "Completed Service Bus message {MessageId} for stream {StreamNamespace}:{StreamKey}",
+                                receivedMessage.ServiceBusReceivedMessage.MessageId,
+                                serviceBusContainer.StreamId.GetNamespace(),
+                                serviceBusContainer.StreamId.GetKeyAsString());
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex,
+                                "Failed to complete Service Bus message {MessageId}, abandoning for redelivery",
+                                receivedMessage.ServiceBusReceivedMessage.MessageId);
+
+                            try
+                            {
+                                await _serviceBusReceiver.AbandonMessageAsync(receivedMessage.ServiceBusReceivedMessage);
+                                Interlocked.Increment(ref abandonedCount);
+                            }
+                            catch (Exception abandonEx)
+                            {
+                                _logger.LogError(abandonEx,
+                                    "Failed to abandon Service Bus message {MessageId} after completion failure",
+                                    receivedMessage.ServiceBusReceivedMessage.MessageId);
+                            }
+                        }
+                    }));
+                }
             }
         }
 

@@ -26,6 +26,10 @@ dotnet add package Microsoft.Orleans.Streaming.AzureServiceBus
 
 Configuration will be documented here once the implementation is complete.
 
+### Failure Handling and Dead Letter Queues
+
+For information about configuring failure handling, retry behavior, and dead letter queue management, see [FAILURE_HANDLING.md](FAILURE_HANDLING.md).
+
 ## Requirements
 
 - .NET 8.0 or later
