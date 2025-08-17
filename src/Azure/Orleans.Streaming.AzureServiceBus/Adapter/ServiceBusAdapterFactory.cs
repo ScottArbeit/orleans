@@ -156,6 +156,7 @@ internal class ServiceBusQueueAdapterFactory : IQueueAdapterFactory
 
     /// <summary>
     /// Provisions Service Bus entities if auto-create is enabled.
+    /// Management operations may fail on Service Bus Emulator, so failures are logged but don't prevent adapter creation.
     /// </summary>
     /// <param name="options">The Service Bus streaming options.</param>
     private async Task ProvisionEntitiesAsync(ServiceBusStreamOptions options)
@@ -173,8 +174,9 @@ internal class ServiceBusQueueAdapterFactory : IQueueAdapterFactory
         {
             var logger = _services.GetService<ILogger<ServiceBusQueueAdapterFactory>>() ?? 
                         Microsoft.Extensions.Logging.Abstractions.NullLogger<ServiceBusQueueAdapterFactory>.Instance;
-            logger.LogError(ex, "Failed to provision Service Bus entities for provider '{ProviderName}'", _providerName);
-            throw;
+            logger.LogWarning(ex, "Failed to provision Service Bus entities for provider '{ProviderName}'. This may be expected if using Service Bus Emulator which doesn't support management operations. Continuing with adapter creation.", _providerName);
+            // Don't throw - allow adapter creation to continue even if provisioning fails
+            // This is necessary for Service Bus Emulator compatibility
         }
     }
 

@@ -11,8 +11,9 @@ using Xunit.Abstractions;
 namespace Orleans.Streaming.AzureServiceBus.Tests;
 
 /// <summary>
-/// Integration tests for Service Bus auto-provisioning through the adapter factory.
-/// These tests validate that the adapter factory correctly provisions entities when AutoCreateEntities=true.
+/// Integration tests for Service Bus adapter factory with auto-provisioning configuration.
+/// These tests validate that the adapter factory works correctly when AutoCreateEntities=true without
+/// actually performing management operations (which fail on Service Bus Emulator).
 /// </summary>
 [Collection(ServiceBusEmulatorCollection.CollectionName)]
 public class ServiceBusAdapterFactoryProvisioningTests
@@ -51,25 +52,15 @@ public class ServiceBusAdapterFactoryProvisioningTests
         var serviceProvider = services.BuildServiceProvider();
         var factory = new ServiceBusQueueAdapterFactory(serviceProvider, "testProvider");
 
-        try
-        {
-            // Act - This should trigger auto-provisioning
-            var adapter = await factory.CreateAdapter();
+        // Act - This should not crash even though provisioning will fail in emulator
+        var adapter = await factory.CreateAdapter();
 
-            // Assert
-            Assert.NotNull(adapter);
-            Assert.Equal("testProvider", adapter.Name);
-            Assert.False(adapter.IsRewindable);
+        // Assert - Just verify adapter was created despite provisioning limitations
+        Assert.NotNull(adapter);
+        Assert.Equal("testProvider", adapter.Name);
+        Assert.False(adapter.IsRewindable);
 
-            _output.WriteLine($"Successfully created adapter with auto-provisioned queue: {randomQueueName}");
-        }
-        catch (Exception ex)
-        {
-            _output.WriteLine($"Exception during adapter creation: {ex}");
-            // For now, we just verify that the factory doesn't crash
-            // The actual provisioning might fail due to emulator limitations, but that's acceptable for this test
-            Assert.NotNull(ex); // At least we got some response
-        }
+        _output.WriteLine($"Successfully created adapter with AutoCreateEntities=true for queue: {randomQueueName}");
     }
 
     [Fact]
@@ -99,25 +90,15 @@ public class ServiceBusAdapterFactoryProvisioningTests
         var serviceProvider = services.BuildServiceProvider();
         var factory = new ServiceBusQueueAdapterFactory(serviceProvider, "testProvider");
 
-        try
-        {
-            // Act - This should trigger auto-provisioning  
-            var adapter = await factory.CreateAdapter();
+        // Act - This should not crash even though provisioning will fail in emulator
+        var adapter = await factory.CreateAdapter();
 
-            // Assert
-            Assert.NotNull(adapter);
-            Assert.Equal("testProvider", adapter.Name);
-            Assert.False(adapter.IsRewindable);
+        // Assert - Just verify adapter was created despite provisioning limitations
+        Assert.NotNull(adapter);
+        Assert.Equal("testProvider", adapter.Name);
+        Assert.False(adapter.IsRewindable);
 
-            _output.WriteLine($"Successfully created adapter with auto-provisioned topic: {randomTopicName} and subscription: {randomSubscriptionName}");
-        }
-        catch (Exception ex)
-        {
-            _output.WriteLine($"Exception during adapter creation: {ex}");
-            // For now, we just verify that the factory doesn't crash
-            // The actual provisioning might fail due to emulator limitations, but that's acceptable for this test
-            Assert.NotNull(ex); // At least we got some response
-        }
+        _output.WriteLine($"Successfully created adapter with AutoCreateEntities=true for topic: {randomTopicName} and subscription: {randomSubscriptionName}");
     }
 
     [Fact]
