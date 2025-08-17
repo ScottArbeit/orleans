@@ -94,7 +94,7 @@ internal class ServiceBusQueueAdapterFactory : IQueueAdapterFactory
 
         // Create the adapter
         var adapter = new ServiceBusAdapter(_providerName, options, dataAdapter, _queueMapper, logger, failureHandler);
-
+        await Task.CompletedTask;
         return adapter;
     }
 

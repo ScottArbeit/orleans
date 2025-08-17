@@ -199,7 +199,7 @@ public class ServiceBusEmulatorFixture : IAsyncLifetime
             .WithPortBinding(DefaultDataApiPort, DefaultDataApiPort)
             .WithEnvironment("ACCEPT_EULA", "Y")
             .WithEnvironment("SQL_CONNECTION_STRING", sqlConnectionString)
-            .WithEnvironment("SQL_WAIT_INTERVAL", "8")
+            .WithEnvironment("SQL_WAIT_INTERVAL", "5")
             .WithEnvironment("SQL_SERVER", _sqlServerContainerName)
             .WithEnvironment("MSSQL_SA_PASSWORD", DefaultSqlServerPassword)
             .WithBindMount(_configDirectory, "/ServiceBus_Emulator/ConfigFiles")
