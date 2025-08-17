@@ -36,7 +36,7 @@ public class ServiceBusAdapterReceiverTests
         var logger = NullLogger<ServiceBusAdapterReceiver>.Instance;
 
         // Act & Assert - Creating with null data adapter should throw
-        Assert.Throws<ArgumentNullException>(() => new ServiceBusAdapterReceiver(queueId, options, null!, logger));
+        Assert.Throws<ArgumentNullException>(() => new ServiceBusAdapterReceiver(queueId, "TestProvider", options, null!, logger));
     }
 
     [Fact]
@@ -47,7 +47,7 @@ public class ServiceBusAdapterReceiverTests
         var options = CreateServiceBusStreamOptions();
         var logger = NullLogger<ServiceBusAdapterReceiver>.Instance;
 
-        using var receiver = new ServiceBusAdapterReceiver(queueId, options, CreateDataAdapter(), logger);
+        using var receiver = new ServiceBusAdapterReceiver(queueId, "TestProvider", options, CreateDataAdapter(), logger);
 
         // Act - Shutdown before getting messages
         await receiver.Shutdown(TimeSpan.FromSeconds(30));
@@ -66,7 +66,7 @@ public class ServiceBusAdapterReceiverTests
         var options = CreateServiceBusStreamOptions();
         var logger = NullLogger<ServiceBusAdapterReceiver>.Instance;
 
-        using var receiver = new ServiceBusAdapterReceiver(queueId, options, CreateDataAdapter(), logger);
+        using var receiver = new ServiceBusAdapterReceiver(queueId, "TestProvider", options, CreateDataAdapter(), logger);
 
         // Act & Assert - Should not throw on empty list
         await receiver.MessagesDeliveredAsync(Array.Empty<IBatchContainer>());
