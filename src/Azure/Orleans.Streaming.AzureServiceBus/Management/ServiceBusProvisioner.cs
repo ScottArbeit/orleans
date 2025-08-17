@@ -94,7 +94,13 @@ internal class ServiceBusProvisioner
             {
                 string entityName = ServiceBusEntityNamer.GetEntityName(options, i);
                 // Extract subscription name from "topic:subscription" format
-                string subscriptionName = entityName.Split(':')[1];
+                var parts = entityName.Split(':');
+                if (parts.Length < 2)
+                {
+                    _logger.LogError("Invalid entity name format: '{EntityName}'. Expected format 'topic:subscription'. Skipping.", entityName);
+                    continue;
+                }
+                string subscriptionName = parts[1];
                 await CreateSubscriptionIfNotExistsAsync(options.TopicName, subscriptionName, options);
             }
         }
