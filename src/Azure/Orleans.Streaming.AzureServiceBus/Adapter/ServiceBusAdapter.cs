@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using Orleans.Runtime;
 using Orleans.Serialization;
 using Orleans.Streams;
+using Orleans.Streaming.AzureServiceBus.Telemetry;
 
 namespace Orleans.Streaming.AzureServiceBus;
 
@@ -133,21 +134,30 @@ internal class ServiceBusAdapter : IQueueAdapter, IDisposable
                 await SendBatchAsync(streamId, batch, token, requestContext);
             }
 
+            // Record successful publish metrics
+            var entityName = ServiceBusEntityNamer.GetEntityName(_options);
+            ServiceBusStreamingMetrics.RecordPublishBatch(_providerName, entityName, eventList.Count);
+
             _logger.LogDebug(
-                "Successfully queued {EventCount} events in {BatchCount} batches for stream {StreamNamespace}:{StreamKey}",
+                "Successfully queued {EventCount} events in {BatchCount} batches for stream {StreamNamespace}:{StreamKey} to entity {EntityName}",
                 eventList.Count,
                 batches.Count,
                 streamId.GetNamespace(),
-                streamId.GetKeyAsString());
+                streamId.GetKeyAsString(),
+                entityName);
         }
         catch (Exception ex)
         {
+            // Record failed publish metrics
+            var entityName = ServiceBusEntityNamer.GetEntityName(_options);
+            ServiceBusStreamingMetrics.RecordPublishFailure(_providerName, entityName, eventList.Count);
+
             _logger.LogError(ex,
                 "Failed to queue {EventCount} events for stream {StreamNamespace}:{StreamKey} to Service Bus entity '{EntityName}'",
                 eventList.Count,
                 streamId.GetNamespace(),
                 streamId.GetKeyAsString(),
-                ServiceBusEntityNamer.GetEntityName(_options));
+                entityName);
             throw;
         }
     }
@@ -165,7 +175,7 @@ internal class ServiceBusAdapter : IQueueAdapter, IDisposable
         }
 
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<ServiceBusAdapterReceiver>.Instance;
-        return new ServiceBusAdapterReceiver(queueId, _options, _dataAdapter, logger, _failureHandler);
+        return new ServiceBusAdapterReceiver(queueId, _providerName, _options, _dataAdapter, logger, _failureHandler);
     }
 
     /// <summary>
