@@ -24,7 +24,7 @@ public class ServiceBusStreamFailureHandlerTests
         var handler = new ServiceBusStreamFailureHandler(logger);
 
         // Assert
-        Assert.False(handler.ShouldFaultSubsriptionOnError);
+        Assert.False(handler.ShouldFaultSubscriptionOnError);
     }
 
     [Fact]
