@@ -31,9 +31,12 @@ public class ServiceBusQueueMapperMultipleEntitiesTests
         
         // Verify the queue names follow the expected pattern: <prefix>-q-0..N-1
         var expectedNames = new[] { "test-prefix-q-0", "test-prefix-q-1", "test-prefix-q-2", "test-prefix-q-3" };
-        for (int i = 0; i < allQueues.Length; i++)
+        var actualNames = allQueues.Select(q => q.ToString()).ToArray();
+        
+        // Check that each expected name appears in the actual names
+        for (int i = 0; i < expectedNames.Length; i++)
         {
-            Assert.Contains(expectedNames[i], allQueues[i].ToString());
+            Assert.Contains(expectedNames[i], actualNames);
         }
     }
 
@@ -58,9 +61,12 @@ public class ServiceBusQueueMapperMultipleEntitiesTests
         
         // Verify the subscription names follow the expected pattern: <topic>:<prefix>-sub-0..N-1
         var expectedNames = new[] { "my-topic:test-prefix-sub-0", "my-topic:test-prefix-sub-1", "my-topic:test-prefix-sub-2" };
-        for (int i = 0; i < allQueues.Length; i++)
+        var actualNames = allQueues.Select(q => q.ToString()).ToArray();
+        
+        // Check that each expected name appears in the actual names
+        for (int i = 0; i < expectedNames.Length; i++)
         {
-            Assert.Contains(expectedNames[i], allQueues[i].ToString());
+            Assert.Contains(expectedNames[i], actualNames);
         }
     }
 
