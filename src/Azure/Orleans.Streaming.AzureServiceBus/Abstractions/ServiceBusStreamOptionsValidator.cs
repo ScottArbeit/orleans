@@ -91,11 +91,8 @@ public class ServiceBusStreamOptionsValidator : IValidateOptions<ServiceBusStrea
                 "Receiver.MaxConcurrentHandlers must be greater than zero.");
         }
 
-        if (options.Receiver.MaxConcurrentHandlers > 1)
-        {
-            return ValidateOptionsResult.Fail(
-                "Receiver.MaxConcurrentHandlers is capped to 1 in MVP to preserve message order.");
-        }
+        // Note: We allow MaxConcurrentHandlers > 1 but will emit warnings at runtime
+        // since increasing concurrency breaks message ordering guarantees
 
         if (options.Receiver.LockRenewalDuration <= TimeSpan.Zero)
         {

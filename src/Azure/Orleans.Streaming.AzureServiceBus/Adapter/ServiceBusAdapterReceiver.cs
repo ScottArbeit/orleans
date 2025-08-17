@@ -64,6 +64,16 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
             ServiceBusEntityNamer.GetEntityName(_options),
             _options.Receiver.ReceiveBatchSize,
             _options.Receiver.PrefetchCount);
+
+        // Warn if concurrency > 1 as it breaks ordering guarantees
+        if (_options.Receiver.MaxConcurrentHandlers > 1)
+        {
+            _logger.LogWarning(
+                "ServiceBus adapter receiver for queue {QueueId} is configured with MaxConcurrentHandlers = {MaxConcurrentHandlers}. " +
+                "This breaks message ordering guarantees. For strict ordering, use MaxConcurrentHandlers = 1.",
+                _queueId,
+                _options.Receiver.MaxConcurrentHandlers);
+        }
     }
 
     /// <summary>
