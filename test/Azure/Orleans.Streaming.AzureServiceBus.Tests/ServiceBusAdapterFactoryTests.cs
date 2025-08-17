@@ -209,7 +209,7 @@ public class ServiceBusAdapterFactoryTests
 
         // Assert
         Assert.NotNull(failureHandler);
-        Assert.False(failureHandler.ShouldFaultSubsriptionOnError);
+        Assert.False(failureHandler.ShouldFaultSubscriptionOnError);
     }
 
     [Fact]
