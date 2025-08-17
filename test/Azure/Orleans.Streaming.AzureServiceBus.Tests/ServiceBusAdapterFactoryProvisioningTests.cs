@@ -206,3 +206,30 @@ internal class TestLogger : ILogger
         }
     }
 }
+
+/// <summary>
+/// Generic test logger implementation.
+/// </summary>
+internal class TestLogger<T> : ILogger<T>
+{
+    private readonly ITestOutputHelper _output;
+
+    public TestLogger(ITestOutputHelper output)
+    {
+        _output = output;
+    }
+
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+    public bool IsEnabled(LogLevel logLevel) => true;
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        var message = formatter(state, exception);
+        _output.WriteLine($"[{logLevel}] {typeof(T).Name}: {message}");
+        if (exception is not null)
+        {
+            _output.WriteLine($"Exception: {exception}");
+        }
+    }
+}
