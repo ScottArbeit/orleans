@@ -10,7 +10,7 @@ public static class ServiceBusEntityNamer
     /// <summary>
     /// Gets the canonical entity name based on the configured entity kind and options.
     /// For single entity (EntityCount = 1), returns the base entity name.
-    /// For multiple entities, this method is for backward compatibility and returns the first entity name.
+    /// For multiple entities, this method is for backward compatibility and returns the name of the first entity, which follows the indexed naming pattern (e.g., "prefix-q-0").
     /// </summary>
     /// <param name="options">The Service Bus streaming options.</param>
     /// <returns>The canonical entity name for the configured entity kind.</returns>
