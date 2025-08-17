@@ -154,7 +154,14 @@ internal class TestOptionsMonitor<T> : IOptionsMonitor<T>
 
     public T CurrentValue => _value;
 
-    public T Get(string? name) => string.IsNullOrEmpty(name) || name == _name ? _value : default!;
+    public T Get(string? name)
+    {
+        if (string.IsNullOrEmpty(name) || name == _name)
+        {
+            return _value;
+        }
+        throw new ArgumentException($"Unrecognized options name: {name}", nameof(name));
+    }
 
     public IDisposable? OnChange(Action<T, string?> listener) => null;
 }
