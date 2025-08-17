@@ -35,10 +35,21 @@ public class ServiceBusStreamOptionsValidator : IValidateOptions<ServiceBusStrea
         switch (options.EntityKind)
         {
             case EntityKind.Queue:
-                if (string.IsNullOrWhiteSpace(options.QueueName))
+                if (options.EntityCount == 1)
                 {
-                    return ValidateOptionsResult.Fail(
-                        "QueueName must be provided when EntityKind is Queue.");
+                    if (string.IsNullOrWhiteSpace(options.QueueName))
+                    {
+                        return ValidateOptionsResult.Fail(
+                            "QueueName must be provided when EntityKind is Queue and EntityCount is 1.");
+                    }
+                }
+                else
+                {
+                    if (string.IsNullOrWhiteSpace(options.EntityNamePrefix))
+                    {
+                        return ValidateOptionsResult.Fail(
+                            "EntityNamePrefix must be provided when EntityCount > 1.");
+                    }
                 }
                 break;
 
@@ -48,15 +59,34 @@ public class ServiceBusStreamOptionsValidator : IValidateOptions<ServiceBusStrea
                     return ValidateOptionsResult.Fail(
                         "TopicName must be provided when EntityKind is TopicSubscription.");
                 }
-                if (string.IsNullOrWhiteSpace(options.SubscriptionName))
+                
+                if (options.EntityCount == 1)
                 {
-                    return ValidateOptionsResult.Fail(
-                        "SubscriptionName must be provided when EntityKind is TopicSubscription.");
+                    if (string.IsNullOrWhiteSpace(options.SubscriptionName))
+                    {
+                        return ValidateOptionsResult.Fail(
+                            "SubscriptionName must be provided when EntityKind is TopicSubscription and EntityCount is 1.");
+                    }
+                }
+                else
+                {
+                    if (string.IsNullOrWhiteSpace(options.EntityNamePrefix))
+                    {
+                        return ValidateOptionsResult.Fail(
+                            "EntityNamePrefix must be provided when EntityCount > 1.");
+                    }
                 }
                 break;
 
             default:
                 return ValidateOptionsResult.Fail($"Invalid EntityKind: {options.EntityKind}");
+        }
+
+        // Validate EntityCount
+        if (options.EntityCount <= 0)
+        {
+            return ValidateOptionsResult.Fail(
+                "EntityCount must be greater than zero.");
         }
 
         // Validate publisher settings
