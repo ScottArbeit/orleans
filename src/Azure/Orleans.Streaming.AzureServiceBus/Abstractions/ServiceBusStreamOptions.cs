@@ -128,16 +128,24 @@ public class PublisherSettings
 
 /// <summary>
 /// Session ID strategy for Service Bus messages.
+/// 
+/// Trade-offs for SessionIdStrategy.UseStreamId:
+/// - PROS: Service Bus ensures per-session ordering automatically; messages from the same stream ID 
+///   will be processed in order even with higher concurrency settings.
+/// - CONS: Requires session-aware receivers which add complexity; may reduce throughput for 
+///   high-volume scenarios; limited to entities that support sessions.
+/// - NOTE: Full session support is deferred in this MVP implementation.
 /// </summary>
 public enum SessionIdStrategy
 {
     /// <summary>
-    /// Do not use session IDs.
+    /// Do not use session IDs. Ordering depends on MaxConcurrentHandlers = 1.
     /// </summary>
     None,
 
     /// <summary>
-    /// Use the stream ID as the session ID.
+    /// Use the stream ID as the session ID. Enables per-stream ordering even with higher concurrency,
+    /// but requires session-enabled Service Bus entities and session-aware message processing.
     /// </summary>
     UseStreamId
 }
@@ -158,7 +166,11 @@ public class ReceiverSettings
     public int ReceiveBatchSize { get; set; } = 32;
 
     /// <summary>
-    /// The maximum number of concurrent message handlers (capped to 1 in MVP to preserve order).
+    /// The maximum number of concurrent message handlers.
+    /// 
+    /// Default is 1 to preserve message ordering. Setting this to > 1 will improve throughput
+    /// but breaks message ordering guarantees unless SessionIdStrategy.UseStreamId is used
+    /// with session-enabled Service Bus entities.
     /// </summary>
     public int MaxConcurrentHandlers { get; set; } = 1;
 

@@ -205,7 +205,7 @@ public class ServiceBusStreamOptionsValidationTests
     }
 
     [Fact]
-    public void ValidateOptions_MaxConcurrentHandlersGreaterThanOne_ReturnsFailure()
+    public void ValidateOptions_MaxConcurrentHandlersGreaterThanOne_ReturnsSuccess()
     {
         // Arrange
         var options = new ServiceBusStreamOptions
@@ -220,8 +220,7 @@ public class ServiceBusStreamOptionsValidationTests
         var result = _validator.Validate("test", options);
 
         // Assert
-        Assert.False(result.Succeeded);
-        Assert.Contains("Receiver.MaxConcurrentHandlers is capped to 1 in MVP", result.FailureMessage);
+        Assert.True(result.Succeeded);
     }
 
     [Fact]
