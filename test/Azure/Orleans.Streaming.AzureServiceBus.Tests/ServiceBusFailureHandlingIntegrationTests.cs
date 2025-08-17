@@ -45,48 +45,58 @@ public class ServiceBusFailureHandlingIntegrationTests
         var factory = ServiceBusAdapterFactory.Create(serviceProvider, "test-provider") as ServiceBusQueueAdapterFactory;
         Assert.NotNull(factory);
 
+        // Get the failure handler from the factory to ensure it's properly configured
+        var failureHandler = await factory.GetDeliveryFailureHandler(QueueId.GetQueueId("test-queue", 0, 0)) as ServiceBusStreamFailureHandler;
+        Assert.NotNull(failureHandler);
+
         var adapter = await factory.CreateAdapter();
         var receiver = adapter.CreateReceiver(QueueId.GetQueueId("test-queue", 0, 0));
 
-        // Create a failure handler that tracks failures
-        var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
-        var failureLogger = loggerFactory.CreateLogger<ServiceBusStreamFailureHandler>();
-        var failureHandler = new ServiceBusStreamFailureHandler(failureLogger);
+        // Initialize the receiver to start the background pump
+        await receiver.Initialize(TimeSpan.FromSeconds(30));
 
-        // Send a test message first
-        var streamId = StreamId.Create("test-namespace", "test-key");
-        var events = new List<object> { "test-message-for-failure" };
-        await adapter.QueueMessageBatchAsync(streamId, events, null, new Dictionary<string, object>());
+        try
+        {
+            // Send a test message first
+            var streamId = StreamId.Create("test-namespace", "test-key");
+            var events = new List<object> { "test-message-for-failure" };
+            await adapter.QueueMessageBatchAsync(streamId, events, null, new Dictionary<string, object>());
 
-        // Wait a bit for the message to be available
-        await Task.Delay(TimeSpan.FromSeconds(2));
+            // Wait for the message to be received by the background pump
+            await Task.Delay(TimeSpan.FromSeconds(3));
 
-        // Act - Get the message and simulate delivery failure
-        var messages = await receiver.GetQueueMessagesAsync(1);
-        Assert.Single(messages);
+            // Act - Get the message and simulate delivery failure
+            var messages = await receiver.GetQueueMessagesAsync(1);
+            Assert.Single(messages);
 
-        var batchContainer = messages[0] as ServiceBusBatchContainer;
-        Assert.NotNull(batchContainer);
+            var batchContainer = messages[0] as ServiceBusBatchContainer;
+            Assert.NotNull(batchContainer);
 
-        // Simulate delivery failure by marking the token as failed
-        await failureHandler.OnDeliveryFailure(
-            GuidId.GetNewGuidId(), 
-            "test-provider", 
-            streamId, 
-            batchContainer.SequenceToken);
+            // Simulate delivery failure by marking the token as failed
+            await failureHandler.OnDeliveryFailure(
+                GuidId.GetNewGuidId(), 
+                "test-provider", 
+                streamId, 
+                batchContainer.SequenceToken);
 
-        // Verify the token is marked as failed
-        Assert.True(failureHandler.IsTokenFailed(batchContainer.SequenceToken));
+            // Verify the token is marked as failed
+            Assert.True(failureHandler.IsTokenFailed(batchContainer.SequenceToken));
 
-        // This would normally be called by the Orleans infrastructure
-        // In a real scenario, the receiver would check the failure handler
-        await receiver.MessagesDeliveredAsync(messages);
+            // This would normally be called by the Orleans infrastructure
+            // In a real scenario, the receiver would check the failure handler
+            await receiver.MessagesDeliveredAsync(messages);
 
-        // Assert - The message should have been abandoned (not completed)
-        // We can verify this by checking that the failure token was cleared (indicating abandon was called)
-        Assert.False(failureHandler.IsTokenFailed(batchContainer.SequenceToken));
+            // Assert - The message should have been abandoned (not completed)
+            // We can verify this by checking that the failure token was cleared (indicating abandon was called)
+            Assert.False(failureHandler.IsTokenFailed(batchContainer.SequenceToken));
 
-        _output.WriteLine("Delivery failure test completed successfully");
+            _output.WriteLine("Delivery failure test completed successfully");
+        }
+        finally
+        {
+            // Clean up
+            await receiver.Shutdown(TimeSpan.FromSeconds(10));
+        }
     }
 
     [Fact]
@@ -102,26 +112,37 @@ public class ServiceBusFailureHandlingIntegrationTests
         var adapter = await factory.CreateAdapter();
         var receiver = adapter.CreateReceiver(QueueId.GetQueueId("test-queue", 0, 0));
 
-        // Send a test message
-        var streamId = StreamId.Create("test-namespace", "successful-message");
-        var events = new List<object> { "test-message-success" };
-        await adapter.QueueMessageBatchAsync(streamId, events, null, new Dictionary<string, object>());
+        // Initialize the receiver to start the background pump
+        await receiver.Initialize(TimeSpan.FromSeconds(30));
 
-        // Wait a bit for the message to be available
-        await Task.Delay(TimeSpan.FromSeconds(2));
+        try
+        {
+            // Send a test message
+            var streamId = StreamId.Create("test-namespace", "successful-message");
+            var events = new List<object> { "test-message-success" };
+            await adapter.QueueMessageBatchAsync(streamId, events, null, new Dictionary<string, object>());
 
-        // Act - Get the message and simulate successful delivery
-        var messages = await receiver.GetQueueMessagesAsync(1);
-        Assert.Single(messages);
+            // Wait for the message to be received by the background pump
+            await Task.Delay(TimeSpan.FromSeconds(3));
 
-        var batchContainer = messages[0] as ServiceBusBatchContainer;
-        Assert.NotNull(batchContainer);
+            // Act - Get the message and simulate successful delivery
+            var messages = await receiver.GetQueueMessagesAsync(1);
+            Assert.Single(messages);
 
-        // Do NOT mark as failed - this simulates successful delivery
-        // Just call MessagesDeliveredAsync directly
-        await receiver.MessagesDeliveredAsync(messages);
+            var batchContainer = messages[0] as ServiceBusBatchContainer;
+            Assert.NotNull(batchContainer);
 
-        _output.WriteLine("Successful delivery test completed");
+            // Do NOT mark as failed - this simulates successful delivery
+            // Just call MessagesDeliveredAsync directly
+            await receiver.MessagesDeliveredAsync(messages);
+
+            _output.WriteLine("Successful delivery test completed");
+        }
+        finally
+        {
+            // Clean up
+            await receiver.Shutdown(TimeSpan.FromSeconds(10));
+        }
     }
 
     [Fact]

@@ -68,7 +68,7 @@ internal class ServiceBusQueueAdapterFactory : IQueueAdapterFactory
     /// Creates a queue adapter for Service Bus streaming.
     /// </summary>
     /// <returns>The queue adapter</returns>
-    public Task<IQueueAdapter> CreateAdapter()
+    public async Task<IQueueAdapter> CreateAdapter()
     {
         // Get the Service Bus stream options
         var optionsMonitor = _services.GetRequiredService<IOptionsMonitor<ServiceBusStreamOptions>>();
@@ -82,13 +82,20 @@ internal class ServiceBusQueueAdapterFactory : IQueueAdapterFactory
         var logger = _services.GetService<ILogger<ServiceBusAdapter>>() ?? 
                     Microsoft.Extensions.Logging.Abstractions.NullLogger<ServiceBusAdapter>.Instance;
 
-        // Get the failure handler if it's our custom one
+        // Ensure the failure handler is initialized
+        if (_streamFailureHandler is null)
+        {
+            var loggerFactory = _services.GetService<ILoggerFactory>() ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance;
+            var failureLogger = loggerFactory.CreateLogger<ServiceBusStreamFailureHandler>();
+            _streamFailureHandler = new ServiceBusStreamFailureHandler(failureLogger);
+        }
+
         var failureHandler = _streamFailureHandler as ServiceBusStreamFailureHandler;
 
         // Create the adapter
         var adapter = new ServiceBusAdapter(_providerName, options, dataAdapter, _queueMapper, logger, failureHandler);
 
-        return Task.FromResult<IQueueAdapter>(adapter);
+        return adapter;
     }
 
     /// <summary>
