@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using Azure.Messaging.ServiceBus.Administration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -74,6 +75,12 @@ internal class ServiceBusQueueAdapterFactory : IQueueAdapterFactory
         var optionsMonitor = _services.GetRequiredService<IOptionsMonitor<ServiceBusStreamOptions>>();
         var options = optionsMonitor.Get(_providerName);
 
+        // Provision entities if auto-create is enabled
+        if (options.AutoCreateEntities)
+        {
+            await ProvisionEntitiesAsync(options);
+        }
+
         // Get the data adapter from DI or create one
         var serializer = _services.GetRequiredService<Serializer<ServiceBusBatchContainer>>();
         var dataAdapter = new ServiceBusDataAdapter(serializer);
@@ -145,5 +152,53 @@ internal class ServiceBusQueueAdapterFactory : IQueueAdapterFactory
         }
         
         return Task.FromResult(_streamFailureHandler);
+    }
+
+    /// <summary>
+    /// Provisions Service Bus entities if auto-create is enabled.
+    /// Management operations may fail on Service Bus Emulator, so failures are logged but don't prevent adapter creation.
+    /// </summary>
+    /// <param name="options">The Service Bus streaming options.</param>
+    private async Task ProvisionEntitiesAsync(ServiceBusStreamOptions options)
+    {
+        try
+        {
+            var adminClient = CreateServiceBusAdministrationClient(options);
+            var loggerFactory = _services.GetService<ILoggerFactory>() ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance;
+            var logger = loggerFactory.CreateLogger<ServiceBusProvisioner>();
+            var provisioner = new ServiceBusProvisioner(adminClient, logger);
+            
+            await provisioner.ProvisionEntitiesAsync(options);
+        }
+        catch (Exception ex)
+        {
+            var logger = _services.GetService<ILogger<ServiceBusQueueAdapterFactory>>() ?? 
+                        Microsoft.Extensions.Logging.Abstractions.NullLogger<ServiceBusQueueAdapterFactory>.Instance;
+            logger.LogWarning(ex, "Failed to provision Service Bus entities for provider '{ProviderName}'. This may be expected if using Service Bus Emulator which doesn't support management operations. Continuing with adapter creation.", _providerName);
+            // Don't throw - allow adapter creation to continue even if provisioning fails
+            // This is necessary for Service Bus Emulator compatibility
+        }
+    }
+
+    /// <summary>
+    /// Creates a Service Bus administration client based on the configured connection options.
+    /// </summary>
+    /// <param name="options">The Service Bus streaming options.</param>
+    /// <returns>A configured Service Bus administration client.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when connection configuration is invalid.</exception>
+    private static ServiceBusAdministrationClient CreateServiceBusAdministrationClient(ServiceBusStreamOptions options)
+    {
+        if (!string.IsNullOrWhiteSpace(options.ConnectionString))
+        {
+            return new ServiceBusAdministrationClient(options.ConnectionString);
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.FullyQualifiedNamespace) && options.Credential is not null)
+        {
+            return new ServiceBusAdministrationClient(options.FullyQualifiedNamespace, options.Credential);
+        }
+
+        throw new InvalidOperationException(
+            "Either ConnectionString or both FullyQualifiedNamespace and Credential must be configured for Service Bus streaming.");
     }
 }
