@@ -42,7 +42,7 @@ namespace Orleans.Providers.Streams.PersistentStreams
 
             this.serializer = serializer;
             this.clusterId = clusterId;
-            ShouldFaultSubsriptionOnError = faultOnFailure;
+            ShouldFaultSubscriptionOnError = faultOnFailure;
             this.createEntity = createEntity ?? DefaultCreateEntity;
             dataManager = new AzureTableDataManager<TEntity>(
                 azureStorageOptions,
@@ -52,7 +52,7 @@ namespace Orleans.Providers.Streams.PersistentStreams
         /// <summary>
         /// Indicates if the subscription should be put in a faulted state upon stream failures
         /// </summary>
-        public bool ShouldFaultSubsriptionOnError { get; private set; }
+        public bool ShouldFaultSubscriptionOnError { get; private set; }
 
         /// <summary>
         /// Initialization

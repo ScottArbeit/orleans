@@ -179,7 +179,7 @@ public class ServiceBusFailureHandlingIntegrationTests
         // Assert
         Assert.NotNull(failureHandler);
         Assert.IsType<ServiceBusStreamFailureHandler>(failureHandler);
-        Assert.False(failureHandler.ShouldFaultSubsriptionOnError);
+        Assert.False(failureHandler.ShouldFaultSubscriptionOnError);
 
         _output.WriteLine($"Failure handler type: {failureHandler.GetType().Name}");
     }
