@@ -63,10 +63,19 @@ public class ServiceBusFailureHandlingIntegrationTests
             await adapter.QueueMessageBatchAsync(streamId, events, null, new Dictionary<string, object>());
 
             // Wait for the message to be received by the background pump
-            await Task.Delay(TimeSpan.FromSeconds(3));
-
-            // Act - Get the message and simulate delivery failure
-            var messages = await receiver.GetQueueMessagesAsync(1);
+            // Try polling with retries to handle timing issues
+            IList<IBatchContainer> messages = Array.Empty<IBatchContainer>();
+            for (int attempt = 0; attempt < 10; attempt++)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(500));
+                messages = await receiver.GetQueueMessagesAsync(1);
+                if (messages.Count > 0)
+                {
+                    break;
+                }
+                _output.WriteLine($"Attempt {attempt + 1}: No messages received yet, retrying...");
+            }
+            
             Assert.Single(messages);
 
             var batchContainer = messages[0] as ServiceBusBatchContainer;
@@ -123,10 +132,19 @@ public class ServiceBusFailureHandlingIntegrationTests
             await adapter.QueueMessageBatchAsync(streamId, events, null, new Dictionary<string, object>());
 
             // Wait for the message to be received by the background pump
-            await Task.Delay(TimeSpan.FromSeconds(3));
+            // Try polling with retries to handle timing issues
+            IList<IBatchContainer> messages = Array.Empty<IBatchContainer>();
+            for (int attempt = 0; attempt < 10; attempt++)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(500));
+                messages = await receiver.GetQueueMessagesAsync(1);
+                if (messages.Count > 0)
+                {
+                    break;
+                }
+                _output.WriteLine($"Attempt {attempt + 1}: No messages received yet, retrying...");
+            }
 
-            // Act - Get the message and simulate successful delivery
-            var messages = await receiver.GetQueueMessagesAsync(1);
             Assert.Single(messages);
 
             var batchContainer = messages[0] as ServiceBusBatchContainer;
@@ -215,6 +233,22 @@ public class ServiceBusFailureHandlingIntegrationTests
             options.ConnectionString = _fixture.ServiceBusConnectionString;
             options.EntityKind = EntityKind.Queue;
             options.QueueName = ServiceBusEmulatorFixture.QueueName; // Use the pre-configured queue
+            
+            // Configure receiver settings for testing
+            options.Receiver = new ReceiverSettings
+            {
+                PrefetchCount = 10,
+                ReceiveBatchSize = 5,
+                LockAutoRenew = false, // Disable to reduce complexity in tests
+                MaxConcurrentHandlers = 1
+            };
+            
+            // Configure publisher settings for testing
+            options.Publisher = new PublisherSettings
+            {
+                BatchSize = 100,
+                MessageTimeToLive = TimeSpan.FromMinutes(30) // Reasonable TTL for tests
+            };
         });
 
         return services;
