@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Orleans.Runtime;
 using Orleans.Streaming.AzureServiceBus;
+using TestExtensions;
 using Xunit;
 
 namespace Orleans.Streaming.AzureServiceBus.Tests;
@@ -11,7 +12,7 @@ namespace Orleans.Streaming.AzureServiceBus.Tests;
 /// </summary>
 public class ServiceBusQueueMapperMultipleEntitiesTests
 {
-    [Fact]
+    [Fact, TestCategory("BVT"), TestCategory("AzureServiceBus")]
     public void Constructor_MultipleQueues_CreatesMapperWithCorrectQueueCount()
     {
         // Arrange
@@ -40,7 +41,7 @@ public class ServiceBusQueueMapperMultipleEntitiesTests
         }
     }
 
-    [Fact]
+    [Fact, TestCategory("BVT"), TestCategory("AzureServiceBus")]
     public void Constructor_MultipleTopicSubscriptions_CreatesMapperWithCorrectSubscriptionCount()
     {
         // Arrange
@@ -70,7 +71,7 @@ public class ServiceBusQueueMapperMultipleEntitiesTests
         }
     }
 
-    [Fact]
+    [Fact, TestCategory("BVT"), TestCategory("AzureServiceBus")]
     public void GetQueueForStream_MultipleQueues_UsesConsistentHashing()
     {
         // Arrange
