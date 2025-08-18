@@ -134,7 +134,7 @@ public class ServiceBusFailureHandlingIntegrationTests
             // Wait for the message to be received by the background pump
             // Try polling with retries to handle timing issues
             IList<IBatchContainer> messages = Array.Empty<IBatchContainer>();
-            for (int attempt = 0; attempt < 10; attempt++)
+            for (var attempt = 0; attempt < 10; attempt++)
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(500));
                 messages = await receiver.GetQueueMessagesAsync(1);
@@ -233,7 +233,7 @@ public class ServiceBusFailureHandlingIntegrationTests
             options.ConnectionString = _fixture.ServiceBusConnectionString;
             options.EntityKind = EntityKind.Queue;
             options.QueueName = ServiceBusEmulatorFixture.QueueName; // Use the pre-configured queue
-            
+            options.AutoCreateEntities = false;
             // Configure receiver settings for testing
             options.Receiver = new ReceiverSettings
             {

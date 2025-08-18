@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics.Metrics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
 using Microsoft.Extensions.Logging;
 using Orleans.Streams;
+using Orleans.Streaming.AzureServiceBus.Telemetry;
 
 namespace Orleans.Streaming.AzureServiceBus;
 
@@ -18,6 +20,7 @@ namespace Orleans.Streaming.AzureServiceBus;
 internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
 {
     private readonly QueueId _queueId;
+    private readonly string _providerName;
     private readonly ServiceBusStreamOptions _options;
     private readonly ServiceBusDataAdapter _dataAdapter;
     private readonly ILogger<ServiceBusAdapterReceiver> _logger;
@@ -30,23 +33,27 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
     private bool _disposed;
     private volatile bool _shutdown;
     private long _sequenceCounter;
+    private readonly IDisposable _cacheObserverRegistration;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ServiceBusAdapterReceiver"/> class.
     /// </summary>
     /// <param name="queueId">The queue identifier.</param>
+    /// <param name="providerName">The stream provider name.</param>
     /// <param name="options">The Service Bus streaming options.</param>
     /// <param name="dataAdapter">The data adapter for message conversion.</param>
     /// <param name="logger">The logger.</param>
     /// <param name="failureHandler">Optional failure handler for tracking delivery failures.</param>
     public ServiceBusAdapterReceiver(
         QueueId queueId,
+        string providerName,
         ServiceBusStreamOptions options,
         ServiceBusDataAdapter dataAdapter,
         ILogger<ServiceBusAdapterReceiver> logger,
         ServiceBusStreamFailureHandler? failureHandler = null)
     {
         _queueId = queueId;
+        _providerName = providerName ?? throw new ArgumentNullException(nameof(providerName));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _dataAdapter = dataAdapter ?? throw new ArgumentNullException(nameof(dataAdapter));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -55,6 +62,11 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
         _serviceBusClient = CreateServiceBusClient(options);
         _messageQueue = new ConcurrentQueue<ReceivedMessage>();
         _cancellationTokenSource = new CancellationTokenSource();
+
+        // Register cache size observer for metrics
+        _cacheObserverRegistration = ServiceBusStreamingMetrics.RegisterCacheSizeObserver(
+            _queueId.ToString(),
+            () => _messageQueue.Count);
 
         _logger.LogInformation(
             "ServiceBus adapter receiver initialized for queue {QueueId} with entity kind '{EntityKind}', " +
@@ -174,11 +186,18 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
 
         if (messages.Count > 0)
         {
+            var entityName = ServiceBusEntityNamer.GetEntityName(_options);
+            ServiceBusStreamingMetrics.RecordReceiveBatch(
+                _providerName, 
+                entityName, 
+                _queueId.ToString(), 
+                messages.Count);
+
             _logger.LogDebug(
                 "Retrieved {MessageCount} messages for queue {QueueId} from Service Bus entity '{EntityName}'",
                 messages.Count,
                 _queueId,
-                ServiceBusEntityNamer.GetEntityName(_options));
+                entityName);
         }
 
         return Task.FromResult<IList<IBatchContainer>>(messages);
@@ -222,6 +241,26 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
                             await _serviceBusReceiver.AbandonMessageAsync(receivedMessage.ServiceBusReceivedMessage);
                             receivedMessage.IsCompleted = true;
                             Interlocked.Increment(ref abandonedCount);
+
+                            // Track potential DLQ candidates (best-effort detection based on delivery count)
+                            var deliveryCount = receivedMessage.ServiceBusReceivedMessage.DeliveryCount;
+                            const int DlqSuspectedThreshold = 5; // Typical max delivery count before DLQ
+                            
+                            if (deliveryCount >= DlqSuspectedThreshold)
+                            {
+                                ServiceBusStreamingMetrics.RecordDlqSuspected(
+                                    _providerName,
+                                    ServiceBusEntityNamer.GetEntityName(_options),
+                                    _queueId.ToString(),
+                                    1);
+                                
+                                _logger.LogWarning(
+                                    "Message {MessageId} for stream {StreamNamespace}:{StreamKey} may be sent to DLQ after abandonment (delivery count: {DeliveryCount})",
+                                    receivedMessage.ServiceBusReceivedMessage.MessageId,
+                                    serviceBusContainer.StreamId.GetNamespace(),
+                                    serviceBusContainer.StreamId.GetKeyAsString(),
+                                    deliveryCount);
+                            }
 
                             // Clear the failed token from tracking
                             _failureHandler?.ClearFailedToken(serviceBusContainer.SequenceToken);
@@ -284,6 +323,18 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
         if (tasks.Count > 0)
         {
             await Task.WhenAll(tasks);
+
+            var entityName = ServiceBusEntityNamer.GetEntityName(_options);
+            
+            if (completedCount > 0)
+            {
+                ServiceBusStreamingMetrics.RecordMessagesCompleted(_providerName, entityName, _queueId.ToString(), completedCount);
+            }
+            
+            if (abandonedCount > 0)
+            {
+                ServiceBusStreamingMetrics.RecordMessagesAbandoned(_providerName, entityName, _queueId.ToString(), abandonedCount);
+            }
 
             _logger.LogDebug(
                 "Message delivery completed for queue {QueueId}: {CompletedCount} completed, {AbandonedCount} abandoned",
@@ -371,6 +422,7 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
             _serviceBusReceiver?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(10));
             _serviceBusClient?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(10));
             _cancellationTokenSource.Dispose();
+            _cacheObserverRegistration.Dispose();
         }
         catch (Exception ex)
         {
@@ -430,6 +482,19 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
                             }
                         }
 
+                        // Check for cache pressure (simple heuristic: warn if queue size exceeds threshold)
+                        var currentCacheSize = _messageQueue.Count;
+                        const int CachePressureThreshold = 1000; // Configurable threshold
+                        
+                        if (currentCacheSize > CachePressureThreshold)
+                        {
+                            ServiceBusStreamingMetrics.RecordCachePressureTrigger(_providerName, _queueId.ToString());
+                            
+                            _logger.LogWarning(
+                                "Cache pressure detected for queue {QueueId}: {CacheSize} messages queued (threshold: {Threshold})",
+                                _queueId, currentCacheSize, CachePressureThreshold);
+                        }
+
                         _logger.LogTrace(
                             "Received {MessageCount} messages from Service Bus entity '{EntityName}' for queue {QueueId}",
                             receivedMessages.Count,
@@ -444,18 +509,24 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
                 }
                 catch (ServiceBusException sbEx) when (sbEx.Reason == ServiceBusFailureReason.MessagingEntityNotFound)
                 {
+                    var entityName = ServiceBusEntityNamer.GetEntityName(_options);
+                    ServiceBusStreamingMetrics.RecordReceiveFailure(_providerName, entityName, _queueId.ToString());
+
                     _logger.LogError(sbEx,
                         "Service Bus entity '{EntityName}' not found for queue {QueueId}. Stopping background pump.",
-                        ServiceBusEntityNamer.GetEntityName(_options),
+                        entityName,
                         _queueId);
                     break;
                 }
                 catch (Exception ex)
                 {
+                    var entityName = ServiceBusEntityNamer.GetEntityName(_options);
+                    ServiceBusStreamingMetrics.RecordReceiveFailure(_providerName, entityName, _queueId.ToString());
+
                     _logger.LogError(ex,
                         "Error in background pump for queue {QueueId} on Service Bus entity '{EntityName}'",
                         _queueId,
-                        ServiceBusEntityNamer.GetEntityName(_options));
+                        entityName);
 
                     // Wait before retrying to avoid tight loop on persistent errors
                     await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
