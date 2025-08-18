@@ -30,6 +30,40 @@ Configuration will be documented here once the implementation is complete.
 
 For information about configuring failure handling, retry behavior, and dead letter queue management, see [FAILURE_HANDLING.md](FAILURE_HANDLING.md).
 
+### Graceful Shutdown and At-Least-Once Semantics
+
+The Azure Service Bus streaming provider implements graceful shutdown with deterministic behavior:
+
+#### Shutdown Process
+1. **Stop Fetching**: The background message pump stops receiving new messages from Service Bus
+2. **Cache Draining**: Messages already in the internal cache are processed up to a configurable deadline
+3. **Message Abandonment**: After the deadline, remaining unprocessed messages are abandoned for redelivery
+4. **Resource Cleanup**: Service Bus clients and resources are disposed cleanly
+
+#### Configuration
+You can configure the cache drain timeout during shutdown:
+
+```csharp
+services.AddOrleans(builder =>
+{
+    builder.UseServiceBusStreaming("ConnectionString", options =>
+    {
+        options.Receiver.CacheDrainTimeout = TimeSpan.FromSeconds(30); // Default: 30 seconds
+    });
+});
+```
+
+#### At-Least-Once Guarantees
+- Messages are delivered **at least once** but may be delivered multiple times
+- During shutdown, unprocessed messages are abandoned and will be redelivered after restart
+- This ensures no message loss beyond the inherent at-least-once semantics of Service Bus
+- Applications should design message handlers to be idempotent to handle potential duplicates
+
+#### Cancellation Support
+- The streaming provider respects `CancellationToken` for clean shutdown
+- Lock renewal tasks are cancelled gracefully during shutdown
+- Background operations stop promptly when cancellation is requested
+
 ## Requirements
 
 - .NET 8.0 or later
