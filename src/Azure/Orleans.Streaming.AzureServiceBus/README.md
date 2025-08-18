@@ -26,7 +26,58 @@ dotnet add package Microsoft.Orleans.Streaming.AzureServiceBus
 
 Configuration will be documented here once the implementation is complete.
 
-### Failure Handling and Dead Letter Queues
+### Topic/Subscription Fan-out Semantics
+
+### Provider Stance: Orleans Logical Fan-out vs Service Bus Physical Fan-out
+
+The Azure Service Bus streaming provider follows a specific approach for handling multiple Orleans stream subscribers:
+
+**One Service Bus subscription per service instance (entity)** - Orleans performs logical fan-out to stream subscribers. The provider does **NOT** create one Service Bus subscription per Orleans subscriber.
+
+#### How It Works
+
+1. **Service Bus Level**: Each service instance uses one Azure Service Bus subscription per configured entity
+2. **Orleans Level**: Multiple Orleans grains can subscribe to the same stream
+3. **Message Flow**: 
+   - Messages are sent to the Service Bus topic
+   - The single Service Bus subscription receives each message once
+   - Orleans streaming infrastructure receives the message and fans it out to all registered Orleans grain subscribers
+   - Each Orleans grain subscriber receives the message
+
+#### Example Configuration
+
+For multiple entities (Step 10):
+```csharp
+services.AddOrleans(builder =>
+{
+    builder.UseServiceBusStreaming("ConnectionString", options =>
+    {
+        options.EntityKind = EntityKind.TopicSubscription;
+        options.TopicName = "my-topic";
+        options.EntityCount = 3; // Creates 3 subscriptions: my-topic:prefix-sub-0, my-topic:prefix-sub-1, my-topic:prefix-sub-2
+        options.EntityNamePrefix = "prefix";
+    });
+});
+```
+
+#### Implications and Recommended Patterns
+
+**Benefits:**
+- **Efficiency**: Reduces Service Bus subscription management overhead
+- **Cost**: Lower Service Bus costs (fewer subscriptions to manage)
+- **Simplicity**: Orleans handles the complexity of fan-out internally
+- **Compatibility**: Works seamlessly with Orleans' existing streaming abstractions
+
+**Considerations:**
+- **Throughput**: All Orleans subscribers on the same stream share the throughput of the single Service Bus subscription
+- **Message Ordering**: Per-session message ordering is maintained within each Service Bus subscription
+- **Scaling**: Scale out by increasing `EntityCount` to create more Service Bus subscriptions for load distribution
+
+**Recommended Patterns:**
+- Use multiple entities (`EntityCount > 1`) for high-throughput scenarios
+- Group related streams that can share throughput characteristics
+- Consider subscription-level configuration (MaxDeliveryCount, TTL) affects all Orleans subscribers
+- Design message handlers to be idempotent as Service Bus provides at-least-once delivery semantics
 
 For information about configuring failure handling, retry behavior, and dead letter queue management, see [FAILURE_HANDLING.md](FAILURE_HANDLING.md).
 
