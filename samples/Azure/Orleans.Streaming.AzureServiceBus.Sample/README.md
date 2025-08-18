@@ -140,6 +140,6 @@ Waiting for messages to be processed...
 
 ## Learn More
 
-- [Orleans Streaming Documentation](https://learn.microsoft.com/dotnet/orleans/host/configuration/distributed-tracing)
+- [Orleans Streaming Documentation](https://learn.microsoft.com/dotnet/orleans/streaming/)
 - [Azure Service Bus Documentation](https://docs.microsoft.com/azure/service-bus/)
 - [Orleans Documentation](https://learn.microsoft.com/dotnet/orleans/)
