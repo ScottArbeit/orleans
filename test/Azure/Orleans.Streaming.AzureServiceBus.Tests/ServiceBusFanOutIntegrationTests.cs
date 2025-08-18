@@ -4,10 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Azure.Messaging.ServiceBus;
 using Azure.Messaging.ServiceBus.Administration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Orleans.Configuration;
 using Orleans.Providers.Streams.Common;
@@ -37,9 +35,8 @@ public class ServiceBusFanOutIntegrationTests
     }
 
     /// <summary>
-    /// Tests that Orleans logical fan-out works with Service Bus topic/subscription.
-    /// Multiple stream observers should all receive the same message from a single Service Bus subscription.
-    /// This validates the provider stance: one SB subscription per service instance, Orleans does logical fan-out.
+    /// Tests that Orleans logical fan-out works with Service Bus.
+    /// Multiple stream observers should all receive the same message from a single Service Bus entity.
     /// </summary>
     [Fact]
     public async Task MultiplePlStreamSubscribers_SingleServiceBusSubscription_AllReceiveMessages()
@@ -52,11 +49,10 @@ public class ServiceBusFanOutIntegrationTests
         Assert.NotNull(factory);
 
         var adapter = await factory.CreateAdapter();
-        var queueId = QueueId.GetQueueId($"{ServiceBusEmulatorFixture.TopicName}:{ServiceBusEmulatorFixture.SubscriptionName}", 0, 0);
-        var receiver = adapter.CreateReceiver(queueId);
 
-        // Set up the topic and subscription
-        await SetupServiceBusEntities();
+        // Use the emulator's pre-provisioned queue
+        var queueId = QueueId.GetQueueId(ServiceBusEmulatorFixture.QueueName, 0, 0);
+        var receiver = adapter.CreateReceiver(queueId);
 
         // Initialize the receiver
         await receiver.Initialize(TimeSpan.FromSeconds(30));
@@ -73,7 +69,7 @@ public class ServiceBusFanOutIntegrationTests
             // Subscribe both observers to the same stream
             var streamId = StreamId.Create("test-namespace", "test-stream");
 
-            // Send a test message to the Service Bus topic
+            // Send a test message
             var testMessage = "test-message-for-fanout";
             var events = new List<object> { testMessage };
             await adapter.QueueMessageBatchAsync(streamId, events, null, new Dictionary<string, object>());
@@ -97,8 +93,6 @@ public class ServiceBusFanOutIntegrationTests
             var batchContainer = messages[0];
 
             // Simulate Orleans streaming infrastructure delivering to multiple observers
-            // This is what Orleans does internally - it takes the message from the single SB subscription
-            // and fans it out to all registered stream subscribers
             await observer1.OnNextAsync(batchContainer);
             await observer2.OnNextAsync(batchContainer);
 
@@ -109,14 +103,12 @@ public class ServiceBusFanOutIntegrationTests
             Assert.Single(receivedMessages1);
             Assert.Single(receivedMessages2);
 
-            // Both should have received the same message content
             var container1 = receivedMessages1[0] as IBatchContainer;
             var container2 = receivedMessages2[0] as IBatchContainer;
             
             Assert.NotNull(container1);
             Assert.NotNull(container2);
 
-            // Extract the actual message content
             var events1 = container1.GetEvents<object>().Select(evt => evt.Item1).ToList();
             var events2 = container2.GetEvents<object>().Select(evt => evt.Item1).ToList();
 
@@ -125,8 +117,8 @@ public class ServiceBusFanOutIntegrationTests
             Assert.Equal(testMessage, events1[0]);
             Assert.Equal(testMessage, events2[0]);
 
-            _output.WriteLine("✓ Both observers received the same message from single Service Bus subscription");
-            _output.WriteLine("✓ Orleans logical fan-out working correctly with Service Bus topics");
+            _output.WriteLine("✓ Both observers received the same message from a single Service Bus entity (emulator)");
+            _output.WriteLine("✓ Orleans logical fan-out working correctly");
 
             // Mark messages as delivered
             await receiver.MessagesDeliveredAsync(messages);
@@ -137,9 +129,6 @@ public class ServiceBusFanOutIntegrationTests
         }
     }
 
-    /// <summary>
-    /// Test stream observer that captures messages for verification.
-    /// </summary>
     private class TestStreamObserver : IAsyncObserver<IBatchContainer>
     {
         private readonly List<object> _receivedMessages;
@@ -175,6 +164,7 @@ public class ServiceBusFanOutIntegrationTests
 
     /// <summary>
     /// Creates the service collection with proper Service Bus streaming configuration.
+    /// Uses the emulator's queue to avoid management-plane requirements.
     /// </summary>
     private ServiceCollection CreateServiceCollection()
     {
@@ -186,14 +176,13 @@ public class ServiceBusFanOutIntegrationTests
         services.AddSerializer();
         services.AddLogging();
 
-        // Configure Service Bus options
+        // Configure Service Bus options for the emulator queue
         services.Configure<ServiceBusStreamOptions>("test-provider", options =>
         {
             options.ConnectionString = _fixture.ServiceBusConnectionString;
-            options.EntityKind = EntityKind.TopicSubscription;
-            options.TopicName = ServiceBusEmulatorFixture.TopicName;
-            options.SubscriptionName = ServiceBusEmulatorFixture.SubscriptionName;
-            options.AutoCreateEntities = false; // Emulator doesn't support auto-creation
+            options.EntityKind = EntityKind.Queue;
+            options.QueueName = ServiceBusEmulatorFixture.QueueName;
+            options.AutoCreateEntities = false; // Emulator doesn't support auto-creation/management plane
         });
 
         // Configure Orleans cluster options - needed for some factory methods
@@ -206,35 +195,7 @@ public class ServiceBusFanOutIntegrationTests
         return services;
     }
 
-    /// <summary>
-    /// Sets up the required Service Bus topic and subscription.
-    /// </summary>
-    private async Task SetupServiceBusEntities()
-    {
-        var adminClient = new ServiceBusAdministrationClient(_fixture.ServiceBusConnectionString);
-        
-        try
-        {
-            // Create topic if it doesn't exist
-            if (!await adminClient.TopicExistsAsync(ServiceBusEmulatorFixture.TopicName))
-            {
-                await adminClient.CreateTopicAsync(ServiceBusEmulatorFixture.TopicName);
-                _output.WriteLine($"Created topic: {ServiceBusEmulatorFixture.TopicName}");
-            }
-
-            // Create subscription if it doesn't exist
-            if (!await adminClient.SubscriptionExistsAsync(ServiceBusEmulatorFixture.TopicName, ServiceBusEmulatorFixture.SubscriptionName))
-            {
-                await adminClient.CreateSubscriptionAsync(ServiceBusEmulatorFixture.TopicName, ServiceBusEmulatorFixture.SubscriptionName);
-                _output.WriteLine($"Created subscription: {ServiceBusEmulatorFixture.SubscriptionName}");
-            }
-
-            _output.WriteLine($"Service Bus entities ready: {ServiceBusEmulatorFixture.TopicName}/{ServiceBusEmulatorFixture.SubscriptionName}");
-        }
-        catch (Exception ex)
-        {
-            _output.WriteLine($"Error setting up Service Bus entities: {ex.Message}");
-            throw;
-        }
-    }
+    // NOTE: Management-plane setup is intentionally omitted for the emulator.
+    // The emulator does not expose the Azure management REST endpoints on https://localhost:443,
+    // so ServiceBusAdministrationClient.* calls will fail with connection refused.
 }
