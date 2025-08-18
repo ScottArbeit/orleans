@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../../src/Azure/Orleans.Streaming.AzureServiceBus/Orleans.Streaming.AzureServiceBus.csproj" />
+    <ProjectReference Include="../../../src/Orleans.Core/Orleans.Core.csproj" />
+    <ProjectReference Include="../../../src/Orleans.Runtime/Orleans.Runtime.csproj" />
+    <ProjectReference Include="../../../src/Orleans.Serialization/Orleans.Serialization.csproj" />
+    <ProjectReference Include="../../../src/Orleans.Serialization.Abstractions/Orleans.Serialization.Abstractions.csproj" />
+    <ProjectReference Include="../../../src/Orleans.Streaming/Orleans.Streaming.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" />
+    <PackageReference Include="Azure.Messaging.ServiceBus" />
+  </ItemGroup>
+
+</Project>
