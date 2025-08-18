@@ -346,6 +346,7 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
 
     /// <summary>
     /// Shuts down the receiver and stops the background pump.
+    /// Implements graceful shutdown with cache draining up to configured deadline.
     /// </summary>
     /// <param name="timeout">The timeout for shutdown.</param>
     /// <returns>A task representing the asynchronous operation.</returns>
@@ -357,13 +358,14 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
         }
 
         _logger.LogInformation(
-            "Shutting down ServiceBus adapter receiver for queue {QueueId} on entity '{EntityName}'",
+            "Shutting down ServiceBus adapter receiver for queue {QueueId} on entity '{EntityName}' with cache drain timeout {CacheDrainTimeout}",
             _queueId,
-            ServiceBusEntityNamer.GetEntityName(_options));
+            ServiceBusEntityNamer.GetEntityName(_options),
+            _options.Receiver.CacheDrainTimeout);
 
         _shutdown = true;
 
-        // Cancel the background pump
+        // Cancel the background pump to stop fetching new messages
         _cancellationTokenSource.Cancel();
 
         // Wait for the background pump to finish
@@ -380,6 +382,12 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
                     _queueId);
             }
         }
+
+        // Drain the cache up to the configured deadline
+        await DrainCacheAsync(_options.Receiver.CacheDrainTimeout);
+
+        // Abandon any remaining in-flight messages deterministically
+        await AbandonRemainingMessagesAsync();
 
         // Dispose Service Bus resources to release prefetched/locked messages.
         try
@@ -529,7 +537,16 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
                         entityName);
 
                     // Wait before retrying to avoid tight loop on persistent errors
-                    await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+                    // Break immediately if cancellation is requested during error handling
+                    try
+                    {
+                        await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        // Expected when shutting down during error recovery
+                        break;
+                    }
                 }
             }
         }
@@ -539,6 +556,155 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
                 "Background pump stopped for queue {QueueId} on Service Bus entity '{EntityName}'",
                 _queueId,
                 ServiceBusEntityNamer.GetEntityName(_options));
+        }
+    }
+
+    /// <summary>
+    /// Drains the message cache up to the specified deadline.
+    /// Processes messages in the cache until either the cache is empty or the deadline is reached.
+    /// </summary>
+    /// <param name="drainTimeout">The maximum time to spend draining the cache.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    private async Task DrainCacheAsync(TimeSpan drainTimeout)
+    {
+        var deadline = DateTimeOffset.UtcNow.Add(drainTimeout);
+        var drainedCount = 0;
+        var skippedCount = 0;
+
+        _logger.LogInformation(
+            "Draining message cache for queue {QueueId} with deadline {Deadline}",
+            _queueId,
+            deadline);
+
+        while (DateTimeOffset.UtcNow < deadline && !_messageQueue.IsEmpty)
+        {
+            if (_messageQueue.TryDequeue(out var receivedMessage))
+            {
+                try
+                {
+                    // Process the message normally through the data adapter
+                    var sequenceId = Interlocked.Increment(ref _sequenceCounter);
+                    var batchContainer = _dataAdapter.FromQueueMessage(receivedMessage.ServiceBusReceivedMessage, sequenceId);
+                    batchContainer.ReceivedMessage = receivedMessage;
+
+                    // Complete the message immediately during drain
+                    if (_serviceBusReceiver is not null)
+                    {
+                        await _serviceBusReceiver.CompleteMessageAsync(receivedMessage.ServiceBusReceivedMessage);
+                        receivedMessage.IsCompleted = true;
+                        drainedCount++;
+                    }
+
+                    _logger.LogTrace(
+                        "Drained Service Bus message {MessageId} during shutdown for queue {QueueId}",
+                        receivedMessage.ServiceBusReceivedMessage.MessageId,
+                        _queueId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "Failed to drain Service Bus message {MessageId} during shutdown, will be abandoned",
+                        receivedMessage.ServiceBusReceivedMessage.MessageId);
+
+                    // Re-enqueue for abandonment
+                    _messageQueue.Enqueue(receivedMessage);
+                    skippedCount++;
+                    break; // Stop draining on error to prevent infinite loops
+                }
+            }
+            else
+            {
+                // Brief delay to allow any final messages to be enqueued
+                await Task.Delay(TimeSpan.FromMilliseconds(10));
+            }
+        }
+
+        var elapsedTime = DateTimeOffset.UtcNow.Subtract(deadline.Subtract(drainTimeout));
+        var remainingCount = _messageQueue.Count;
+
+        _logger.LogInformation(
+            "Cache drain completed for queue {QueueId}: {DrainedCount} messages processed, {SkippedCount} skipped, {RemainingCount} remaining. Elapsed time: {ElapsedTime}",
+            _queueId,
+            drainedCount,
+            skippedCount,
+            remainingCount,
+            elapsedTime);
+
+        if (remainingCount > 0)
+        {
+            _logger.LogWarning(
+                "Cache drain deadline reached for queue {QueueId} with {RemainingCount} messages remaining. " +
+                "These messages will be abandoned to ensure clean shutdown (at-least-once semantics).",
+                _queueId,
+                remainingCount);
+        }
+    }
+
+    /// <summary>
+    /// Abandons any remaining messages in the cache to ensure clean shutdown.
+    /// This implements at-least-once semantics where unprocessed messages will be retried after restart.
+    /// </summary>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    private async Task AbandonRemainingMessagesAsync()
+    {
+        var abandonedCount = 0;
+        var tasks = new List<Task>();
+
+        _logger.LogDebug(
+            "Abandoning {MessageCount} remaining messages for queue {QueueId}",
+            _messageQueue.Count,
+            _queueId);
+
+        while (_messageQueue.TryDequeue(out var receivedMessage))
+        {
+            if (!receivedMessage.IsCompleted && _serviceBusReceiver is not null)
+            {
+                tasks.Add(Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _serviceBusReceiver.AbandonMessageAsync(receivedMessage.ServiceBusReceivedMessage);
+                        receivedMessage.IsCompleted = true;
+                        Interlocked.Increment(ref abandonedCount);
+
+                        _logger.LogTrace(
+                            "Abandoned Service Bus message {MessageId} during shutdown for queue {QueueId}",
+                            receivedMessage.ServiceBusReceivedMessage.MessageId,
+                            _queueId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex,
+                            "Failed to abandon Service Bus message {MessageId} during shutdown",
+                            receivedMessage.ServiceBusReceivedMessage.MessageId);
+                    }
+                }));
+            }
+        }
+
+        if (tasks.Count > 0)
+        {
+            try
+            {
+                await Task.WhenAll(tasks);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Some errors occurred while abandoning messages during shutdown for queue {QueueId}",
+                    _queueId);
+            }
+        }
+
+        if (abandonedCount > 0)
+        {
+            var entityName = ServiceBusEntityNamer.GetEntityName(_options);
+            ServiceBusStreamingMetrics.RecordMessagesAbandoned(_providerName, entityName, _queueId.ToString(), abandonedCount);
+
+            _logger.LogInformation(
+                "Abandoned {AbandonedCount} messages during shutdown for queue {QueueId} to ensure clean stop",
+                abandonedCount,
+                _queueId);
         }
     }
 

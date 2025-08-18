@@ -188,6 +188,17 @@ public class ReceiverSettings
     /// The maximum delivery count for messages (documentation only; actual is entity-level).
     /// </summary>
     public int MaxDeliveryCount { get; set; } = 10;
+
+    /// <summary>
+    /// The timeout for draining the message cache during graceful shutdown.
+    /// Messages in the cache will be processed up to this deadline before stopping.
+    /// After this timeout, remaining messages will be abandoned to ensure clean shutdown.
+    /// </summary>
+    /// <remarks>
+    /// This implements at-least-once semantics - messages not processed during shutdown
+    /// will be retried after restart due to abandonment.
+    /// </remarks>
+    public TimeSpan CacheDrainTimeout { get; set; } = TimeSpan.FromSeconds(30);
 }
 
 /// <summary>
