@@ -16,6 +16,7 @@ using Orleans.Streaming.AzureServiceBus;
 using Orleans.Streaming.AzureServiceBus.Configuration;
 using Orleans.Streaming.AzureServiceBus.Tests.Fixtures;
 using Orleans.Streams;
+using TestExtensions;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -35,7 +36,7 @@ public class ServiceBusFailureHandlingIntegrationTests
         _output = output;
     }
 
-    [Fact]
+    [Fact, TestCategory("Functional"), TestCategory("AzureServiceBus")]
     public async Task DeliveryFailure_AbandonMessageInsteadOfCompleting()
     {
         // Arrange
@@ -108,7 +109,7 @@ public class ServiceBusFailureHandlingIntegrationTests
         }
     }
 
-    [Fact]
+    [Fact, TestCategory("BVT"), TestCategory("AzureServiceBus")]
     public async Task SuccessfulDelivery_CompletesMessage()
     {
         // Arrange
@@ -184,7 +185,7 @@ public class ServiceBusFailureHandlingIntegrationTests
         _output.WriteLine($"Failure handler type: {failureHandler.GetType().Name}");
     }
 
-    [Fact]
+    [Fact, TestCategory("BVT"), TestCategory("AzureServiceBus")]
     public void FailureHandler_DLQCallback_IsInvoked()
     {
         // Arrange

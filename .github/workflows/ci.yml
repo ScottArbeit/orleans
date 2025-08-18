@@ -515,6 +515,71 @@ jobs:
         path: |
           **/TestResults/*
           **/logs/*
+  test-azure-servicebus:
+    name: Azure Service Bus provider tests
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      matrix:
+        test-type: ["Queue-E2E", "Topic-E2E", "Multi-Silo"]
+        framework: [net9.0]
+    steps:
+    - uses: actions/checkout@v4
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        global-json-file: global.json
+    - name: Install Docker Compose
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y docker-compose
+    - name: Test Queue E2E
+      if: matrix.test-type == 'Queue-E2E'
+      run: dotnet test
+        --framework ${{ matrix.framework }}
+        --filter "Category=AzureServiceBus&(Category=BVT|Category=Functional)"
+        --blame-hang-timeout 15m
+        --logger "trx;LogFileName=test_results_azure_servicebus_queue_${{ matrix.framework }}.trx"
+        --logger "GitHubActions;summary.includePassedTests=true;summary.includeSkippedTests=true;summary.includeNotFoundTests=false"
+        -- -parallel none -noshadow
+      env:
+        DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+        DOTNET_NOLOGO: true
+    - name: Test Topic/Subscription E2E
+      if: matrix.test-type == 'Topic-E2E'
+      run: dotnet test
+        samples/Azure/Orleans.Streaming.AzureServiceBus.Sample.Tests/Orleans.Streaming.AzureServiceBus.Sample.Tests.csproj
+        --framework ${{ matrix.framework }}
+        --filter "Category=AzureServiceBus&Category=Functional"
+        --blame-hang-timeout 15m
+        --logger "trx;LogFileName=test_results_azure_servicebus_topic_${{ matrix.framework }}.trx"
+        --logger "GitHubActions;summary.includePassedTests=true;summary.includeSkippedTests=true;summary.includeNotFoundTests=false"
+        -- -parallel none -noshadow
+      env:
+        DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+        DOTNET_NOLOGO: true
+    - name: Test Multi-Silo & Scale-out
+      if: matrix.test-type == 'Multi-Silo'
+      run: dotnet test
+        test/Azure/Orleans.Streaming.AzureServiceBus.Tests/Orleans.Streaming.AzureServiceBus.Tests.csproj
+        --framework ${{ matrix.framework }}
+        --filter "Category=AzureServiceBus&Category=Functional"
+        --blame-hang-timeout 15m
+        --logger "trx;LogFileName=test_results_azure_servicebus_multisilo_${{ matrix.framework }}.trx"
+        --logger "GitHubActions;summary.includePassedTests=true;summary.includeSkippedTests=true;summary.includeNotFoundTests=false"
+        -- -parallel none -noshadow
+      env:
+        DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+        DOTNET_NOLOGO: true
+    - name: Archive Test Results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test_output_${{ github.job }}_${{ matrix.test-type }}_${{ matrix.framework }}
+        retention-days: 1
+        path: |
+          **/TestResults/*
+          **/logs/*
   test:
     name: Test
     runs-on: ${{ matrix.os }}

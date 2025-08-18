@@ -7,6 +7,7 @@ using Orleans.Runtime;
 using Orleans.Streaming.AzureServiceBus.Sample.Grains;
 using Orleans.Streaming.AzureServiceBus.Tests.Fixtures;
 using Orleans.Streams;
+using TestExtensions;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -27,7 +28,7 @@ public class SampleSmokeTests : IClassFixture<ServiceBusEmulatorFixture>
         _output = output;
     }
 
-    [Fact]
+    [Fact, TestCategory("Functional"), TestCategory("AzureServiceBus")]
     public async Task QueueStreaming_ProducerAndConsumer_ShouldWorkCorrectly()
     {
         // Arrange
@@ -82,7 +83,7 @@ public class SampleSmokeTests : IClassFixture<ServiceBusEmulatorFixture>
         await consumer.StopConsuming();
     }
 
-    [Fact]
+    [Fact, TestCategory("Functional"), TestCategory("AzureServiceBus")]
     public async Task TopicSubscriptionStreaming_ProducerAndConsumer_ShouldWorkCorrectly()
     {
         // Arrange
