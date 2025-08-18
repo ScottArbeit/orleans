@@ -183,7 +183,7 @@ public class ServiceBusFanOutIntegrationTests
         // Add required Orleans services
         services.AddSingleton<IStreamQueueMapper, ServiceBusQueueMapper>();
         services.AddSingleton<IQueueAdapterFactory, ServiceBusQueueAdapterFactory>();
-        services.AddSingleton<Serializer>();
+        services.AddSerializer();
         services.AddLogging();
 
         // Configure Service Bus options
@@ -193,6 +193,7 @@ public class ServiceBusFanOutIntegrationTests
             options.EntityKind = EntityKind.TopicSubscription;
             options.TopicName = ServiceBusEmulatorFixture.TopicName;
             options.SubscriptionName = ServiceBusEmulatorFixture.SubscriptionName;
+            options.AutoCreateEntities = false; // Emulator doesn't support auto-creation
         });
 
         // Configure Orleans cluster options - needed for some factory methods
