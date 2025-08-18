@@ -136,15 +136,13 @@ public class ServiceBusMetricsAndLoggingIntegrationTests
     {
         // Arrange
         var cacheSize = 42;
+        var queueId = "test-queue";
 
         // Act: Register cache size observer
-        ServiceBusStreamingMetrics.RegisterCacheSizeObserver(() =>
-        {
-            return new Measurement<int>(cacheSize, new KeyValuePair<string, object?>("queue_id", "test-queue"));
-        });
+        using var registration = ServiceBusStreamingMetrics.RegisterCacheSizeObserver(queueId, () => cacheSize);
 
-        // Assert: Cache size gauge should be registered
-        Assert.NotNull(ServiceBusStreamingMetrics.CacheSize);
+        // Assert: Registration should return a disposable
+        Assert.NotNull(registration);
 
         _output.WriteLine("Cache size observer registered successfully");
     }

@@ -37,7 +37,7 @@ public class ServiceBusAdapterFactoryProvisioningTests
         var options = new ServiceBusStreamOptions
         {
             ConnectionString = _fixture.ServiceBusConnectionString,
-            AutoCreateEntities = true,
+            AutoCreateEntities = false,
             EntityKind = EntityKind.Queue,
             QueueName = randomQueueName,
             EntityCount = 1
@@ -64,7 +64,7 @@ public class ServiceBusAdapterFactoryProvisioningTests
     }
 
     [Fact]
-    public async Task AdapterFactory_Should_Create_Adapter_With_Topic_AutoProvisioning()
+    public async Task AdapterFactory_Should_Create_Adapter()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -74,7 +74,7 @@ public class ServiceBusAdapterFactoryProvisioningTests
         var options = new ServiceBusStreamOptions
         {
             ConnectionString = _fixture.ServiceBusConnectionString,
-            AutoCreateEntities = true,
+            AutoCreateEntities = false,
             EntityKind = EntityKind.TopicSubscription,
             TopicName = randomTopicName,
             SubscriptionName = randomSubscriptionName,

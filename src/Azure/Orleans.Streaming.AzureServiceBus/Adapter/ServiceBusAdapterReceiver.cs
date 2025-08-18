@@ -33,6 +33,7 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
     private bool _disposed;
     private volatile bool _shutdown;
     private long _sequenceCounter;
+    private readonly IDisposable _cacheObserverRegistration;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ServiceBusAdapterReceiver"/> class.
@@ -63,8 +64,9 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
         _cancellationTokenSource = new CancellationTokenSource();
 
         // Register cache size observer for metrics
-        ServiceBusStreamingMetrics.RegisterCacheSizeObserver(() => 
-            new Measurement<int>(_messageQueue.Count, new KeyValuePair<string, object?>("queue_id", _queueId.ToString())));
+        _cacheObserverRegistration = ServiceBusStreamingMetrics.RegisterCacheSizeObserver(
+            _queueId.ToString(),
+            () => _messageQueue.Count);
 
         _logger.LogInformation(
             "ServiceBus adapter receiver initialized for queue {QueueId} with entity kind '{EntityKind}', " +
@@ -420,6 +422,7 @@ internal class ServiceBusAdapterReceiver : IQueueAdapterReceiver, IDisposable
             _serviceBusReceiver?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(10));
             _serviceBusClient?.DisposeAsync().AsTask().Wait(TimeSpan.FromSeconds(10));
             _cancellationTokenSource.Dispose();
+            _cacheObserverRegistration.Dispose();
         }
         catch (Exception ex)
         {

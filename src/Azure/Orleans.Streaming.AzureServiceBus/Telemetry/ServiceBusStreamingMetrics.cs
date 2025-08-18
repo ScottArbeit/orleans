@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.Metrics;
+using System.Threading;
 
 namespace Orleans.Streaming.AzureServiceBus.Telemetry;
 
@@ -49,7 +51,9 @@ internal static class ServiceBusStreamingMetrics
     public static Counter<int> MessagesAbandoned = Meter.CreateCounter<int>(ServiceBusInstrumentNames.SERVICEBUS_MESSAGES_ABANDONED);
 
     // Cache metrics
-    public static ObservableGauge<int> CacheSize = null!;
+    private static ObservableGauge<int>? _cacheSizeGauge;
+    private static readonly object _cacheGaugeInitLock = new();
+    private static readonly ConcurrentDictionary<string, Func<int>> _cacheSizeObservers = new();
     public static Counter<int> CachePressureTriggers = Meter.CreateCounter<int>(ServiceBusInstrumentNames.SERVICEBUS_CACHE_PRESSURE_TRIGGERS);
 
     // DLQ metrics
@@ -60,12 +64,71 @@ internal static class ServiceBusStreamingMetrics
     public static Counter<int> HealthCheckFailures = Meter.CreateCounter<int>(ServiceBusInstrumentNames.SERVICEBUS_HEALTH_CHECK_FAILURES);
 
     /// <summary>
-    /// Registers an observable gauge for cache size monitoring.
+    /// Registers an observable gauge callback for cache size monitoring for a specific queue id.
+    /// Multiple observers can be registered and will be aggregated into a single instrument, emitting one measurement per queue.
     /// </summary>
-    /// <param name="observeValue">Function to observe the current cache size.</param>
-    public static void RegisterCacheSizeObserver(Func<Measurement<int>> observeValue)
+    /// <param name="queueId">The queue identifier.</param>
+    /// <param name="observe">Function which returns the current cache size.</param>
+    /// <returns>An <see cref="IDisposable"/> which will unregister the observer when disposed.</returns>
+    public static IDisposable RegisterCacheSizeObserver(string queueId, Func<int> observe)
     {
-        CacheSize = Meter.CreateObservableGauge<int>(ServiceBusInstrumentNames.SERVICEBUS_CACHE_SIZE, observeValue);
+        if (string.IsNullOrWhiteSpace(queueId)) throw new ArgumentNullException(nameof(queueId));
+        if (observe is null) throw new ArgumentNullException(nameof(observe));
+
+        _cacheSizeObservers[queueId] = observe;
+
+        // Lazily create the instrument once
+        if (_cacheSizeGauge is null)
+        {
+            lock (_cacheGaugeInitLock)
+            {
+                _cacheSizeGauge ??= Meter.CreateObservableGauge<int>(
+                    ServiceBusInstrumentNames.SERVICEBUS_CACHE_SIZE,
+                    ObserveAllCacheSizes);
+            }
+        }
+
+        return new CacheObserverRegistration(queueId);
+    }
+
+    private static IEnumerable<Measurement<int>> ObserveAllCacheSizes()
+    {
+        foreach (var kv in _cacheSizeObservers)
+        {
+            int value;
+            try
+            {
+                value = kv.Value();
+            }
+            catch
+            {
+                // Ignore observer exceptions to avoid breaking instrumentation collection
+                continue;
+            }
+
+            yield return new Measurement<int>(value, new KeyValuePair<string, object?>("queue_id", kv.Key));
+        }
+    }
+
+    private sealed class CacheObserverRegistration : IDisposable
+    {
+        private readonly string _queueId;
+        private int _disposed;
+
+        public CacheObserverRegistration(string queueId)
+        {
+            _queueId = queueId;
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+
+            _cacheSizeObservers.TryRemove(_queueId, out _);
+        }
     }
 
     /// <summary>

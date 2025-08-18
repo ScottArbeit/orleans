@@ -124,6 +124,7 @@ public class ServiceBusAdapterFactoryTests
             options.EntityKind = EntityKind.Queue;
             options.QueueName = ServiceBusEmulatorFixture.QueueName;
             options.ConnectionString = _fixture.ServiceBusConnectionString;
+            options.AutoCreateEntities = false; // Emulator doesn't support auto-creation
         });
         
         // Add Orleans serialization services
