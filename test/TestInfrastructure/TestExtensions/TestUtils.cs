@@ -59,7 +59,9 @@ namespace Tester
         private static void ForceTlsVersion()
         {
             // Force TLS 1.2
+#pragma warning disable SYSLIB0014 // Type or member is obsolete
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
+#pragma warning restore SYSLIB0014 // Type or member is obsolete
         }
 
         public static double CalibrateTimings()
@@ -106,9 +108,11 @@ namespace Tester
         public static void ConfigureClientThreadPoolSettingsForStorageTests(int NumDotNetPoolThreads = 200)
         {
             ThreadPool.SetMinThreads(NumDotNetPoolThreads, NumDotNetPoolThreads);
+#pragma warning disable SYSLIB0014 // Type or member is obsolete
             ServicePointManager.Expect100Continue = false;
             ServicePointManager.DefaultConnectionLimit = NumDotNetPoolThreads; // 1000;
             ServicePointManager.UseNagleAlgorithm = false;
+#pragma warning restore SYSLIB0014 // Type or member is obsolete
         }
 
         public static async Task<int> GetActivationCount(IGrainFactory grainFactory, string grainTypeName)
