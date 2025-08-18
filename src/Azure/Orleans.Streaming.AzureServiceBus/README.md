@@ -1,6 +1,9 @@
 # Microsoft Orleans Streaming for Azure Service Bus
 
-A streaming provider for Microsoft Orleans that uses Azure Service Bus queues as the underlying transport.
+> **⚠️ Non-Rewindable Provider**  
+> This Azure Service Bus streaming provider is **non-rewindable** and follows ASQ/SQS semantics. It does **not** support rewind, offsets, or Event Hubs-style replay functionality. Messages are processed once and cannot be replayed from previous positions in the stream.
+
+A streaming provider for Microsoft Orleans that uses Azure Service Bus queues and topics as the underlying transport.
 
 ## About Orleans
 
@@ -12,9 +15,20 @@ For more information, visit the [Orleans documentation](https://learn.microsoft.
 
 Azure Service Bus is a fully managed enterprise message broker with message queues and publish-subscribe topics. It provides reliable message queuing and durable pub/sub messaging.
 
-## Getting Started
+## Differences vs Event Hubs Provider
 
-This package provides streaming capabilities for Orleans applications using Azure Service Bus as the message transport.
+| Feature | Azure Service Bus Provider | Event Hubs Provider |
+|---------|---------------------------|-------------------|
+| **Rewind Support** | ❌ No rewind capability | ✅ Full rewind and offset support |
+| **Message Semantics** | At-least-once delivery | At-least-once delivery |
+| **Ordering** | Per-queue/subscription ordering | Per-partition ordering |
+| **Use Case** | Traditional messaging, fire-and-forget | Event sourcing, replay scenarios |
+| **Positioning** | Like ASQ/SQS providers | Event streaming with history |
+
+**Choose Service Bus when:** You need traditional messaging patterns without replay requirements.  
+**Choose Event Hubs when:** You need event streaming with rewind and historical data access.
+
+## Quick Start
 
 ### Installation
 
@@ -22,11 +36,300 @@ This package provides streaming capabilities for Orleans applications using Azur
 dotnet add package Microsoft.Orleans.Streaming.AzureServiceBus
 ```
 
-### Basic Configuration
+### Queue-based Streaming (Simple)
 
-Configuration will be documented here once the implementation is complete.
+**Silo Configuration:**
+```csharp
+var builder = Host.CreateApplicationBuilder(args);
 
-### Topic/Subscription Fan-out Semantics
+builder.UseOrleans(silo =>
+{
+    silo.UseLocalhostClustering()
+        .AddServiceBusStreams("ServiceBusProvider", options =>
+        {
+            options.ConnectionString = "Endpoint=sb://your-namespace.servicebus.windows.net/;SharedAccessKeyName=...;SharedAccessKey=...";
+            options.EntityKind = EntityKind.Queue;
+            options.QueueName = "orleans-streaming-queue";
+        });
+});
+
+var host = builder.Build();
+```
+
+**Client Configuration:**
+```csharp
+var builder = Host.CreateApplicationBuilder(args);
+
+builder.UseOrleansClient(client =>
+{
+    client.UseLocalhostClustering()
+          .AddServiceBusStreams("ServiceBusProvider", options =>
+          {
+              options.ConnectionString = "Endpoint=sb://your-namespace.servicebus.windows.net/;SharedAccessKeyName=...;SharedAccessKey=...";
+              options.EntityKind = EntityKind.Queue;
+              options.QueueName = "orleans-streaming-queue";
+          });
+});
+
+var host = builder.Build();
+```
+
+### Topic/Subscription Streaming (Scalable)
+
+**Silo Configuration:**
+```csharp
+silo.AddServiceBusStreams("ServiceBusProvider", options =>
+{
+    options.ConnectionString = "Endpoint=sb://your-namespace.servicebus.windows.net/;SharedAccessKeyName=...;SharedAccessKey=...";
+    options.EntityKind = EntityKind.TopicSubscription;
+    options.TopicName = "orleans-events";
+    options.SubscriptionName = "silo-subscription";
+});
+```
+
+**Client Configuration:**
+```csharp
+client.AddServiceBusStreams("ServiceBusProvider", options =>
+{
+    options.ConnectionString = "Endpoint=sb://your-namespace.servicebus.windows.net/;SharedAccessKeyName=...;SharedAccessKey=...";
+    options.EntityKind = EntityKind.TopicSubscription;
+    options.TopicName = "orleans-events";
+    options.SubscriptionName = "client-subscription";
+});
+```
+
+## Configuration Options
+
+### Connection Settings
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `ConnectionString` | `string` | `""` | Service Bus connection string (Option 1) |
+| `FullyQualifiedNamespace` | `string` | `""` | Service Bus namespace (Option 2, use with Credential) |
+| `Credential` | `TokenCredential` | `null` | Azure credential for authentication (Option 2) |
+
+### Entity Settings
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `EntityKind` | `EntityKind` | `Queue` | Whether to use Queue or TopicSubscription |
+| `QueueName` | `string` | `"orleans-stream"` | Queue name (when EntityKind = Queue) |
+| `TopicName` | `string` | `""` | Topic name (when EntityKind = TopicSubscription) |
+| `SubscriptionName` | `string` | `""` | Subscription name (when EntityKind = TopicSubscription) |
+| `EntityCount` | `int` | `1` | Number of entities for partitioning/scaling |
+| `EntityNamePrefix` | `string` | `""` | Prefix for entity names when EntityCount > 1 |
+| `AutoCreateEntities` | `bool` | `true` | Whether to auto-create queues/topics if they don't exist |
+
+### Publisher Settings
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `Publisher.BatchSize` | `int` | `100` | Number of messages to batch when publishing |
+| `Publisher.MessageTimeToLive` | `TimeSpan` | `14 days` | TTL for published messages |
+| `Publisher.SessionIdStrategy` | `SessionIdStrategy` | `None` | Whether to use session IDs for ordering |
+| `Publisher.PropertiesPrefix` | `string` | `"orleans_"` | Prefix for custom message properties |
+
+### Receiver Settings
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `Receiver.PrefetchCount` | `int` | `0` | Number of messages to prefetch |
+| `Receiver.ReceiveBatchSize` | `int` | `32` | Number of messages to receive in each batch |
+| `Receiver.MaxConcurrentHandlers` | `int` | `1` | Max concurrent message handlers (affects ordering) |
+| `Receiver.LockAutoRenew` | `bool` | `true` | Whether to automatically renew message locks |
+| `Receiver.LockRenewalDuration` | `TimeSpan` | `5 minutes` | Duration for lock renewal |
+| `Receiver.MaxDeliveryCount` | `int` | `10` | Max delivery attempts (documentation only) |
+| `Receiver.CacheDrainTimeout` | `TimeSpan` | `30 seconds` | Graceful shutdown timeout for cache drain |
+
+### Cache Settings
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `Cache.MaxCacheSize` | `int` | `4096` | Maximum number of items in cache |
+| `Cache.CacheEvictionAge` | `TimeSpan` | `10 minutes` | Age at which cache items are evicted |
+| `Cache.CachePressureSoft` | `double` | `0.7` | Soft pressure threshold for eviction |
+| `Cache.CachePressureHard` | `double` | `0.9` | Hard pressure threshold for eviction |
+
+### Dead Letter Handling
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `DeadLetterHandling.LogDeadLetters` | `bool` | `true` | Whether to log dead letter events |
+| `DeadLetterHandling.SurfaceMetrics` | `bool` | `true` | Whether to emit metrics for dead letters |
+| `DeadLetterHandling.ForwardAddress` | `string` | `""` | Forward address for dead letters (Service Bus only) |
+
+### Read-Only Properties
+
+| Property | Type | Value | Description |
+|----------|------|-------|-------------|
+| `AllowRewind` | `bool` | `false` | Always false - this provider doesn't support rewind |
+
+## Message Ordering & Concurrency
+
+### Default Behavior (Ordered)
+- **MaxConcurrentHandlers = 1**: Ensures strict message ordering within each queue/subscription
+- **Trade-off**: Lower throughput but guaranteed order
+- **Use when**: Message order is critical for your application logic
+
+### High Throughput (Unordered)
+```csharp
+options.Receiver.MaxConcurrentHandlers = 16; // or higher
+```
+- **Result**: Higher throughput but no ordering guarantees
+- **Trade-off**: Better performance but messages may be processed out of order
+- **Use when**: Throughput is more important than ordering
+
+### Per-Stream Ordering (Advanced)
+```csharp
+options.Publisher.SessionIdStrategy = SessionIdStrategy.UseStreamId;
+options.Receiver.MaxConcurrentHandlers = 16;
+// Note: Requires session-enabled Service Bus entities
+```
+- **Result**: Per-stream ordering with higher overall throughput
+- **Trade-off**: More complex setup but best of both worlds
+- **Limitation**: Full session support is not included in MVP
+
+## Auto-Provisioning
+
+When `AutoCreateEntities = true` (default), the provider will automatically create Service Bus entities if they don't exist:
+
+### Queue Mode
+```csharp
+options.EntityKind = EntityKind.Queue;
+options.QueueName = "my-queue";
+options.AutoCreateEntities = true; // Will create "my-queue" if it doesn't exist
+```
+
+### Topic/Subscription Mode
+```csharp
+options.EntityKind = EntityKind.TopicSubscription;
+options.TopicName = "my-topic";
+options.SubscriptionName = "my-subscription";
+options.AutoCreateEntities = true; // Will create both topic and subscription
+```
+
+### Multiple Entities (Scaling)
+```csharp
+options.EntityCount = 3;
+options.EntityNamePrefix = "region-east";
+// Creates: region-east-0, region-east-1, region-east-2
+```
+
+### Production Considerations
+- **Disable in production**: Set `AutoCreateEntities = false` for production environments
+- **Pre-create entities**: Use Azure CLI, ARM templates, or Terraform for production deployment
+- **Permissions**: Ensure the service principal has appropriate permissions when auto-provisioning is enabled
+
+## Dead Letter Queue (DLQ) Guidance
+
+Service Bus automatically handles dead letter queues for failed message processing:
+
+### Automatic DLQ Behavior
+- Messages that exceed `MaxDeliveryCount` are moved to the dead letter queue
+- Messages that expire (exceed TTL) are moved to the dead letter queue
+- Messages that cause processing exceptions may be dead lettered
+
+### Monitoring Dead Letters
+```csharp
+options.DeadLetterHandling.LogDeadLetters = true; // Logs DLQ events
+options.DeadLetterHandling.SurfaceMetrics = true; // Emits metrics
+```
+
+### Accessing Dead Letter Messages
+```csharp
+// Use Azure Service Bus SDK directly to access DLQ
+var serviceBusClient = new ServiceBusClient(connectionString);
+var deadLetterReceiver = serviceBusClient.CreateReceiver(queueName, 
+    new ServiceBusReceiverOptions { SubQueue = SubQueue.DeadLetter });
+```
+
+### Best Practices
+- **Monitor DLQ size**: Set up alerts for dead letter queue depth
+- **Investigate patterns**: Regularly check DLQ for recurring issues
+- **Remediation**: Fix issues and replay messages from DLQ when appropriate
+- **Retention**: Configure appropriate TTL for dead letter messages
+
+## Azure Service Bus Emulator
+
+For development and testing, you can use the Azure Service Bus emulator. The Orleans test suite includes a `ServiceBusEmulatorFixture` that demonstrates how to set up the emulator with Docker.
+
+### Prerequisites
+- Docker Desktop or Docker Engine
+- .NET 8.0 or later
+
+### Using the Emulator Fixture
+
+The `ServiceBusEmulatorFixture` provides a complete setup with both SQL Server (required dependency) and Service Bus emulator:
+
+```csharp
+public class MyServiceBusTest : IClassFixture<ServiceBusEmulatorFixture>
+{
+    private readonly ServiceBusEmulatorFixture _fixture;
+
+    public MyServiceBusTest(ServiceBusEmulatorFixture fixture)
+    {
+        _fixture = fixture;
+    }
+
+    [Fact]
+    public async Task TestStreamingWithEmulator()
+    {
+        // Use the emulator connection string
+        var connectionString = _fixture.ServiceBusConnectionString;
+        
+        // Configure Orleans with emulator
+        var silo = new HostBuilder()
+            .UseOrleans(builder =>
+            {
+                builder.UseLocalhostClustering()
+                       .AddServiceBusStreams("ServiceBusProvider", options =>
+                       {
+                           options.ConnectionString = connectionString;
+                           options.EntityKind = EntityKind.Queue;
+                           options.QueueName = ServiceBusEmulatorFixture.QueueName; // "test-queue"
+                       });
+            })
+            .Build();
+    }
+}
+```
+
+### Manual Emulator Setup
+
+If you prefer to run the emulator manually:
+
+```bash
+# Start SQL Server (required dependency)
+docker run -d --name sqlserver \
+  -e "ACCEPT_EULA=Y" \
+  -e "SA_PASSWORD=YourPassword123!" \
+  -p 1433:1433 \
+  mcr.microsoft.com/mssql/server:2022-latest
+
+# Start Service Bus Emulator
+docker run -d --name servicebus-emulator \
+  -e "ACCEPT_EULA=Y" \
+  -e "SQL_SERVER=sqlserver" \
+  -e "SQL_CONNECTION_STRING=Server=sqlserver;Initial Catalog=SBEmulator;Persist Security Info=False;User ID=sa;Password=YourPassword123!;TrustServerCertificate=true;" \
+  -p 5671:5671 \
+  -p 5672:5672 \
+  --link sqlserver \
+  mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
+```
+
+### Emulator Connection String
+
+When using the emulator, use this connection string format:
+```
+Endpoint=sb://localhost:5671;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
+```
+
+### Emulator Limitations
+- Some dead letter features may be no-op in the emulator
+- Production Service Bus features may not be fully supported
+- Performance characteristics differ from the actual service
+
+## Topic/Subscription Fan-out Semantics
 
 ### Provider Stance: Orleans Logical Fan-out vs Service Bus Physical Fan-out
 
