@@ -12,7 +12,7 @@ namespace Orleans.Streams
         /// Gets a value indicating whether the subscription should fault when there is an error.
         /// </summary>
         /// <value><see langword="true" /> if the subscription should fault when there is an error; otherwise, <see langword="false" />.</value>
-        bool ShouldFaultSubsriptionOnError { get; }
+        bool ShouldFaultSubscriptionOnError { get; }
 
         /// <summary>
         /// Called once all measures to deliver an event to a consumer have been exhausted.

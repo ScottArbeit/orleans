@@ -725,7 +725,7 @@ namespace Orleans.Streams
             }
 
             // if configured to fault on delivery failure and this is not an implicit subscription, fault and remove the subscription
-            if (streamFailureHandler.ShouldFaultSubsriptionOnError && !SubscriptionMarker.IsImplicitSubscription(consumerData.SubscriptionId.Guid))
+            if (streamFailureHandler.ShouldFaultSubscriptionOnError && !SubscriptionMarker.IsImplicitSubscription(consumerData.SubscriptionId.Guid))
             {
                 try
                 {

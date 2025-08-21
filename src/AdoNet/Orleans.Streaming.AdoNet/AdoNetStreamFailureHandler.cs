@@ -10,7 +10,7 @@ internal partial class AdoNetStreamFailureHandler(bool faultOnFailure, AdoNetStr
     /// <summary>
     /// Gets a value indicating whether the subscription should fault when there is an error.
     /// </summary>
-    public bool ShouldFaultSubsriptionOnError { get; } = faultOnFailure;
+    public bool ShouldFaultSubscriptionOnError { get; } = faultOnFailure;
 
     /// <summary>
     /// Attempts to move the message to dead letters on delivery failure.

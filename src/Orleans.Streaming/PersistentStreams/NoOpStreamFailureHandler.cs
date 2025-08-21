@@ -19,14 +19,14 @@ namespace Orleans.Streams
         /// <summary>
         /// Initializes a new instance of the <see cref="NoOpStreamDeliveryFailureHandler"/> class.
         /// </summary>
-        /// <param name="faultOnError">The value used for <see cref="ShouldFaultSubsriptionOnError"/>.</param>
+        /// <param name="faultOnError">The value used for <see cref="ShouldFaultSubscriptionOnError"/>.</param>
         public NoOpStreamDeliveryFailureHandler(bool faultOnError)
         {
-            ShouldFaultSubsriptionOnError = faultOnError;
+            ShouldFaultSubscriptionOnError = faultOnError;
         }
 
         /// <inheritdoc/>
-        public bool ShouldFaultSubsriptionOnError { get; }
+        public bool ShouldFaultSubscriptionOnError { get; }
 
         /// <inheritdoc/>
         public Task OnDeliveryFailure(GuidId subscriptionId, string streamProviderName, StreamId streamId,
