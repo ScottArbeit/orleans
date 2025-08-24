@@ -52,7 +52,9 @@ namespace Orleans.Connections.Security.Tests
         public static X509Certificate2 ConvertFromBase64(string encodedCertificate)
         {
             var rawData = Convert.FromBase64String(encodedCertificate);
+#pragma warning disable SYSLIB0057 // Type or member is obsolete
             return new X509Certificate2(rawData, "testing-only");
+#pragma warning restore SYSLIB0057 // Type or member is obsolete
         }
     }
 }

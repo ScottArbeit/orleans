@@ -2,7 +2,7 @@
   <PropertyGroup>
     <PackageId>Microsoft.Orleans.Streaming.AzureServiceBus</PackageId>
     <Title>Microsoft Orleans Azure Service Bus Streaming Provider</Title>
-    <Description>Microsoft Orleans streaming provider backed by Azure Service Bus</Description>
+    <Description>Microsoft Orleans non-rewindable streaming provider backed by Azure Service Bus. Supports queue and topic/subscription patterns without rewind, offsets, or Event Hubs semantics.</Description>
     <PackageTags>$(PackageTags) Azure ServiceBus</PackageTags>
     <DefineConstants>$(DefineConstants);ORLEANS_SERVICEBUS</DefineConstants>
     <TargetFrameworks>$(DefaultTargetFrameworks)</TargetFrameworks>

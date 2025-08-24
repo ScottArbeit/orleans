@@ -1,6 +1,7 @@
 namespace Orleans.Streaming.AzureServiceBus.Tests;
 
 using Orleans.Streaming.AzureServiceBus.Tests.Fixtures;
+using TestExtensions;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -19,7 +20,7 @@ public class ServiceBusEmulatorFixtureTests
         _output = output;
     }
 
-    [Fact]
+    [Fact, TestCategory("BVT"), TestCategory("AzureServiceBus")]
     public void Fixture_Should_Have_Valid_Connection_String()
     {
         var connectionString = _fixture.ServiceBusConnectionString;
@@ -32,7 +33,7 @@ public class ServiceBusEmulatorFixtureTests
         _output.WriteLine($"Connection String: {connectionString}");
     }
 
-    [Fact]
+    [Fact, TestCategory("BVT"), TestCategory("AzureServiceBus")]
     public void Fixture_Should_Have_Valid_Ports()
     {
         var serviceBusPort = _fixture.ExposedServiceBusPort;
@@ -46,7 +47,7 @@ public class ServiceBusEmulatorFixtureTests
         _output.WriteLine($"Data API Port: {dataApiPort}");
     }
 
-    [Fact]
+    [Fact, TestCategory("BVT"), TestCategory("AzureServiceBus")]
     public async Task Fixture_Should_Create_Service_Bus_Client()
     {
         await using var client = _fixture.CreateServiceBusClient();
@@ -57,7 +58,7 @@ public class ServiceBusEmulatorFixtureTests
         _output.WriteLine($"Service Bus Client Namespace: {client.FullyQualifiedNamespace}");
     }
 
-    [Fact]
+    [Fact, TestCategory("Functional"), TestCategory("AzureServiceBus")]
     public async Task Fixture_Should_Support_Real_Message_Operations()
     {
         // Create sender and receiver
@@ -88,7 +89,7 @@ public class ServiceBusEmulatorFixtureTests
         _output.WriteLine("Successfully sent and received message through emulator with SQL Server backend");
     }
 
-    [Fact]
+    [Fact, TestCategory("Functional"), TestCategory("AzureServiceBus")]
     public async Task Fixture_Should_Support_Topic_Subscription_Message_Operations()
     {
         // Create sender and receiver

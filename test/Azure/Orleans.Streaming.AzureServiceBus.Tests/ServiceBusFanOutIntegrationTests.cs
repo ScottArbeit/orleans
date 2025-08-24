@@ -15,6 +15,7 @@ using Orleans.Streaming.AzureServiceBus;
 using Orleans.Streaming.AzureServiceBus.Configuration;
 using Orleans.Streaming.AzureServiceBus.Tests.Fixtures;
 using Orleans.Streams;
+using TestExtensions;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -38,7 +39,7 @@ public class ServiceBusFanOutIntegrationTests
     /// Tests that Orleans logical fan-out works with Service Bus.
     /// Multiple stream observers should all receive the same message from a single Service Bus entity.
     /// </summary>
-    [Fact]
+    [Fact, TestCategory("Functional"), TestCategory("AzureServiceBus")]
     public async Task MultiplePlStreamSubscribers_SingleServiceBusSubscription_AllReceiveMessages()
     {
         // Arrange
