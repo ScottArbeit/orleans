@@ -7,7 +7,8 @@
     <TargetFrameworks>$(DefaultTargetFrameworks)</TargetFrameworks>
     <AssemblyName>Orleans.Persistence.Cosmos</AssemblyName>
     <RootNamespace>Orleans.Persistence.Cosmos</RootNamespace>
-    <OrleansBuildTimeCodeGen>true</OrleansBuildTimeCodeGen>
+    <OrleansBuildTimeCodeGen Condition="'$(CosmosRuntimePackageVersion)' == ''">true</OrleansBuildTimeCodeGen>
+    <OrleansBuildTimeCodeGen Condition="'$(CosmosRuntimePackageVersion)' != ''">false</OrleansBuildTimeCodeGen>
     <DefineConstants>$(DefineConstants);ORLEANS_PERSISTENCE</DefineConstants>
     <Nullable>enable</Nullable>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -22,7 +23,20 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="$(SourceRoot)src\Orleans.Runtime\Orleans.Runtime.csproj" />
+    <ProjectReference Include="$(SourceRoot)src\Orleans.Runtime\Orleans.Runtime.csproj"
+                      Condition="'$(CosmosRuntimePackageVersion)' == ''" />
+    <!-- Build release-line provider packages against the exact public Orleans package set they extend. -->
+    <PackageReference Include="Microsoft.Orleans.Analyzers"
+                      VersionOverride="$(CosmosRuntimePackageVersion)"
+                      PrivateAssets="None"
+                      Condition="'$(CosmosRuntimePackageVersion)' != ''" />
+    <PackageReference Include="Microsoft.Orleans.CodeGenerator"
+                      VersionOverride="$(CosmosRuntimePackageVersion)"
+                      PrivateAssets="None"
+                      Condition="'$(CosmosRuntimePackageVersion)' != ''" />
+    <PackageReference Include="Microsoft.Orleans.Runtime"
+                      VersionOverride="$(CosmosRuntimePackageVersion)"
+                      Condition="'$(CosmosRuntimePackageVersion)' != ''" />
     <PackageReference Include="Azure.Core" />
     <PackageReference Include="Microsoft.Azure.Cosmos" />
   </ItemGroup>
