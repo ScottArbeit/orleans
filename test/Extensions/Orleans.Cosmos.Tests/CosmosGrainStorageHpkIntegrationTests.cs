@@ -110,8 +110,8 @@ public class CosmosGrainStorageHpkIntegrationTests
         var databaseName = $"OrleansHpkQuery{Guid.NewGuid():N}";
         const string containerName = "GrainState";
         const string tenant = "";
-        const string firstGrainType = "current|Δ__kind";
-        const string secondGrainType = "history:类型";
+        const string firstGrainType = "current|kind__segment";
+        const string secondGrainType = "history:kind";
         var clusterOptions = Options.Create(new ClusterOptions { ClusterId = "cluster", ServiceId = "service" });
         var documentIdProvider = new QueryableDocumentIdProvider(clusterOptions, tenant);
         var options = CreateOptions(databaseName, containerName, 3, deleteStateOnClear: false);
@@ -120,8 +120,8 @@ public class CosmosGrainStorageHpkIntegrationTests
         try
         {
             var storage = await StartStorage(options, clusterOptions, documentIdProvider);
-            var firstGrainId = GrainId.Create("test-grain", "segment:#?/\\一");
-            var secondGrainId = GrainId.Create("test-grain", "segment|__二");
+            var firstGrainId = GrainId.Create("test-grain", "segment:#?/\\one");
+            var secondGrainId = GrainId.Create("test-grain", "segment|__two");
             await storage.WriteStateAsync(
                 firstGrainType,
                 firstGrainId,
@@ -155,8 +155,48 @@ public class CosmosGrainStorageHpkIntegrationTests
                 BuildPartitionKey([tenant, firstGrainType]));
             var currentDocument = Assert.Single(currentDocuments);
             Assert.Equal(firstGrainType, currentDocument.Value<string>("PartitionKey2"));
-            Assert.Equal("segment:#?/\\一", currentDocument.Value<string>("PartitionKey3"));
+            Assert.Equal("segment:#?/\\one", currentDocument.Value<string>("PartitionKey3"));
             Assert.Equal(11, currentDocument["State"]!.Value<int>(nameof(TestState.Value)));
+        }
+        finally
+        {
+            await DeleteDatabase(client, databaseName);
+            client.Dispose();
+        }
+    }
+
+    [SkippableFact, TestCategory("Functional")]
+    public async Task HierarchicalPartitionKeys_SupportUnicodeValues()
+    {
+        var databaseName = $"OrleansHpkUnicode{Guid.NewGuid():N}";
+        const string containerName = "GrainState";
+        const string tenant = "租户";
+        const string grainType = "projection-Δ";
+        var clusterOptions = Options.Create(new ClusterOptions { ClusterId = "cluster", ServiceId = "service" });
+        var documentIdProvider = new QueryableDocumentIdProvider(clusterOptions, tenant);
+        var options = CreateOptions(databaseName, containerName, 3, deleteStateOnClear: false);
+        var client = await options.CreateClient(_services);
+
+        try
+        {
+            var storage = await StartStorage(options, clusterOptions, documentIdProvider);
+            var grainId = GrainId.Create("test-grain", "类型-一");
+            var state = new GrainState<TestState> { State = new TestState { Value = 33 } };
+            try
+            {
+                await storage.WriteStateAsync(grainType, grainId, state);
+            }
+            catch (WrappedException exception) when (
+                exception.ToString().Contains("E22P05", StringComparison.Ordinal))
+            {
+                Skip.If(true, "The Linux Cosmos DB emulator rejects Unicode with PostgreSQL error E22P05.");
+            }
+
+            var readState = new GrainState<TestState> { State = new TestState() };
+            await storage.ReadStateAsync(grainType, grainId, readState);
+
+            Assert.True(readState.RecordExists);
+            Assert.Equal(33, readState.State.Value);
         }
         finally
         {
